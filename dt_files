@@ -10,7 +10,7 @@ DB_LIB  = Sequel.connect "sqlite://#{db_base_path}/library.db"
 DB_LIB[:film_rolls].order(:folder).all do |roll|
   dir = roll[:folder]
   unless Dir.exist?(dir)
-    STDERR.puts "NO DIR:#{roll[:id]} #{dir}"
+    warn "NO DIR:#{roll[:id]} #{dir}"
     next
   end
   Dir.entries(dir).each do |file|

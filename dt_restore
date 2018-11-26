@@ -20,7 +20,6 @@ OptionParser.new do |opts|
   opts.on('--ng', 'no geo')  { o.nogeo = true }
   opts.on('-i T', 'Ignore')  { |t| ignore_tags << t }
 end.parse!
-o.v = true if o.vv
 
 GEO = :longitude, :latitude, :altitude
 
@@ -33,13 +32,13 @@ def tag_add imgid, tags
     res = DB_LIB[:used_tags].where(name: t)
     if res.empty?
       newid = DB_LIB[:used_tags].max(:id) + 1
-      puts "new t:#{t} id:#{newid}"
+      puts "ch new t:#{t} id:#{newid}"
       puts DB_LIB[:used_tags].insert(id: newid, name: t)
       puts DB_LIB[:tagged_images].insert(imgid: imgid, tagid: newid)
       puts DB_DATA[:tags].insert(id: newid, name: t)
     else
       id = res.first[:id]
-      puts "add t:#{t} id:#{id}"
+      puts "ch add t:#{t} id:#{id}"
       puts DB_LIB[:tagged_images].insert(imgid: imgid, tagid: id)
     end
   end
@@ -48,12 +47,12 @@ end
 def tag_del imgid, tags
   tags.each do |t|
     id = DB_LIB[:used_tags].where(name: t).first[:id]
-    puts "del t:#{t} id:#{id}"
+    puts "ch del t:#{t} id:#{id}"
     puts DB_LIB[:tagged_images].where(imgid: imgid, tagid: id).delete
     if DB_LIB[:tagged_images].where(tagid: id).count == 0
-      puts "no more used"
-      puts DB_LIB[:used_tags].where(id: id).delete
-      puts DB_DATA[:tags].where(id: id).delete
+      r1 = DB_LIB[:used_tags].where(id: id).delete
+      r2 = DB_DATA[:tags].where(id: id).delete
+      puts "ch no more used ut:#{r1} t:#{r2}"
     end
   end
 end
@@ -63,7 +62,7 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
 
   res = DB_LIB[:film_rolls].where(folder: roll_name)
   if res.empty?
-    STDERR.puts "NO ROLL: #{roll_name}"
+    warn "NO ROLL: #{roll_name}"
     next
   else
     roll_id = res.first[:id]
@@ -77,16 +76,18 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
         .select(:id, :write_timestamp, *GEO)
         .where(film_id: roll_id, filename: file, version: ver)
       if res.empty?
-        STDERR.puts "NO IMAGE IN DB: #{roll_name}/#{file} v:#{ver}"
+        warn "NO IMAGE IN DB: #{roll_name}/#{file} v:#{ver}"
         next
       end
       res.each do |img|
         i = img.to_hash.select{ |k, v| v }
         if i[:write_timestamp] >= meta['t']
-          puts "#{file}:#{ver} is newer" if o.v
+          puts "#{file}:#{ver} is newer" if o.vv
           next unless o.force
+        else
+          puts "#{file}:#{ver} is older" if o.v
         end
-        puts "d: #{i}" if o.vv
+        puts "db: #{i}" if o.vv
         nr = { write_timestamp: Time.now.to_i }
         if meta.key?('geo') && !o.nogeo
           nr[:longitude] = meta['geo'][0] if meta['geo'][0]
@@ -94,10 +95,10 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
           nr[:altitude]  = meta['geo'][2] if meta['geo'][2]
         end
         if i.slice(*GEO) == nr.slice(*GEO)
-          puts 'same geo' if o.v
+          puts 'same geo' if o.vv
         else
           res = o.dry ? 'DRY' : DB_LIB[:images].where(id: i[:id]).update(nr)
-          puts "upd: #{nr} res: #{res}" # if o.v
+          puts "ch geo: #{nr} res: #{res}" if o.v || o.vv
         end
         db_k = {}
         res = DB_LIB[:meta_data].where(id: i[:id]).each do |row|
@@ -106,7 +107,7 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
         meta['k'].each_pair do |k, v|
           db_kk = [i[:id], k.to_i]
           if db_k[db_kk] == v
-            puts "same key: #{db_kk} => #{db_k[db_kk].truncate(40)}" if o.v
+            puts "same k: #{db_kk} => #{db_k[db_kk].truncate(40)}" if o.vv
             db_k.delete db_kk
             next
           end
@@ -117,12 +118,12 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
             res = DB_LIB[:meta_data].where(id: i[:id], key: k).update(value: v)
             res = DB_LIB[:meta_data].insert(id: i[:id], key: k, value: v) if res == 0
           end
-          puts "ch key: #{k} #{v} res:#{res}" # if o.v
+          puts "ch k:#{k} #{v} res:#{res}" # if o.v
         end
         db_k.keys.each do |del|
           d_id, d_k = del
           next if d_k == 2 # title
-          puts "del key: #{d_id} #{d_k} #{db_k[del]}" # if o.v
+          puts "ch del k: #{d_id} #{d_k} #{db_k[del]}" # if o.v
           next if o.dry
           puts DB_LIB[:meta_data].where(id: d_id, key: d_k).delete
         end
@@ -138,18 +139,17 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
         DB_LIB[:used_tags].where(id: tids).map{ |t| t[:name] }.each do |t|
           t =~ /^darktable\|.+/ ? db_dt_tags.push(t) : db_tags.push(t)
         end
-        puts "t:#{tags} dt:#{db_tags}" if o.v
+        puts "t:#{tags} dt:#{db_tags}" if o.vv
         if tags != db_tags
           photo = "#{imgid} #{roll_name}/#{file}"
           if o.add
             diff = []
             (tags - db_tags).each do |nt|
               next if ignore_tags.include?(nt)
-              #db_tags.each{ |dt| puts "add dt:#{dt} nt:#{nt} i:#{nt.index(dt) == 0}" } if o.v
               diff << nt if db_tags.select{ |dt| "dt".index("#{nt}|") == 0 }.empty?
             end
             if diff.length > 0
-              puts "#{photo} add:#{diff}"
+              puts "ch #{photo} add:#{diff}"
               tag_add(imgid, diff) unless o.dry
             end
           end
@@ -157,11 +157,10 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
             diff = []
             (db_tags - tags).each do |nt|
               next if ignore_tags.include?(nt)
-              #db_tags.each{ |dt| puts "del dt:#{dt} nt:#{nt} i:#{nt.index(dt) == 0}" } if o.v
               diff << nt
             end
             if diff.length > 0
-              puts "#{photo} del:#{diff}"
+              puts "ch #{photo} del:#{diff}"
               tag_del(imgid, diff) unless o.dry
             end
           end
