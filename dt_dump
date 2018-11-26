@@ -1,0 +1,53 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'sequel'
+require 'json'
+
+GEO = :longitude, :latitude, :altitude
+
+db_base_path = "#{ENV['HOME']}/.config/darktable"
+DB_LIB  = Sequel.connect "sqlite://#{db_base_path}/library.db"
+
+# M_CREATOR   = 0
+# M_PUBLISHER = 1
+# M_TITLE     = 2
+# M_DESCR     = 3
+# M_RIGHTS    = 4
+
+data = {}
+
+DB_LIB[:film_rolls].order(:folder).all do |roll|
+  d = roll[:folder]
+  data[d] = {}
+  DB_LIB[:images]
+    .select(:id, :filename, :version, :write_timestamp, *GEO)
+    .where(film_id: roll[:id])
+    .order(:filename, :version)
+    .each do |img|
+    meta = {}
+    geo = img.to_hash.slice(*GEO)
+      .values.select{ |v| v }
+      #.map{ |v| "#{v}" }
+    meta[:geo] = geo unless geo.empty?
+    meta[:k] = DB_LIB[:meta_data]
+      .select(:key, :value)
+      .where(id: img[:id])
+      .map{ |r| [r[:key], r[:value]] }.to_h
+    meta[:t] = img[:write_timestamp]
+    f = img[:filename]
+    data[d][f] = {} unless data[d][f]
+    data[d][f][ img[:version] ] = meta
+
+    tids = DB_LIB[:tagged_images]
+      .where(imgid: img[:id])
+      .map{|t| t[:tagid] }
+    tags = DB_LIB[:used_tags]
+      .where(id: tids)
+      .map{ |t| t[:name] }
+      .reject{ |t| t =~ /^darktable\|.+/ }
+    data[d][f][ img[:version] ][:tags] = tags unless tags.empty?
+  end
+end
+
+puts JSON.pretty_generate(data, space: '')

@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'pp'
+require 'optparse'
+require 'ostruct'
+require 'sequel'
+
+o = OpenStruct.new
+OptionParser.new do |opts|
+  opts.on('-d TAG', 'Delete tag') { |t| o.delete_tag = t }
+  opts.on('-r TAG', 'Rename tag') { |t| o.rename_tag = t }
+  opts.on('-n TAG', 'New tag')    { |t| o.new_tag = t }
+end.parse!
+
+db_base_path = "#{ENV['HOME']}/.config/darktable"
+DB_DATA = Sequel.connect "sqlite://#{db_base_path}/data.db"
+DB_LIB  = Sequel.connect "sqlite://#{db_base_path}/library.db"
+
+if o.delete_tag
+  res = DB_DATA[:tags].where(:name => o.delete_tag)
+  if res.empty?
+    abort "no tag '#{o.delete_tag}'"
+  else
+    id = res.first[:id]
+  end
+  puts "id: #{id}"
+  printf "tags: %d\n", DB_DATA[:tags].where(:id => id).delete
+  printf "used_tags: %d\n", DB_LIB[:used_tags].where(:id => id).delete
+  printf "tagged_images: %d\n", DB_LIB[:tagged_images].where(:tagid => id).delete
+elsif o.rename_tag && o.new_tag
+  # puts "rename args: #{o.rename_tag} -> #{o.new_tag}"
+  puts DB_DATA[:tags].where(:name => o.rename_tag).update(name: o.new_tag)
+  puts DB_LIB[:used_tags].where(:name => o.rename_tag).update(name: o.new_tag)
+  DB_DATA[:tags].where(Sequel.like(:name, "%#{o.rename_tag}%")).each do |row|
+    new_name = row[:name].sub o.rename_tag, o.new_tag
+    res = DB_DATA[:tags].where(:id => row[:id]).update(name: new_name)
+    puts "#{row[:name]} -> #{new_name}: #{res}"
+  end
+  DB_LIB[:used_tags].where(Sequel.like(:name, "%#{o.rename_tag}%")).each do |row|
+    new_name = row[:name].sub o.rename_tag, o.new_tag
+    res = DB_LIB[:used_tags].where(:id => row[:id]).update(name: new_name)
+    puts "#{row[:name]} -> #{new_name}: #{res}"
+  end
+else
+  DB_DATA[:tags].order(:name).each{|r| puts r[:name] }
+end
+
