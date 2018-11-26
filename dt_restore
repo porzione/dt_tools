@@ -17,6 +17,7 @@ OptionParser.new do |opts|
   # tags
   opts.on('-a', 'add')       { o.add = true }
   opts.on('-d', 'del')       { o.del = true }
+  opts.on('--ng', 'no geo')  { o.nogeo = true }
   opts.on('-i T', 'Ignore')  { |t| ignore_tags << t }
 end.parse!
 o.v = true if o.vv
@@ -87,7 +88,7 @@ JSON.parse(ARGF.read).each_pair do |roll_name, images|
         end
         puts "d: #{i}" if o.vv
         nr = { write_timestamp: Time.now.to_i }
-        if meta.key?('geo')
+        if meta.key?('geo') && !o.nogeo
           nr[:longitude] = meta['geo'][0] if meta['geo'][0]
           nr[:latitude]  = meta['geo'][1] if meta['geo'][1]
           nr[:altitude]  = meta['geo'][2] if meta['geo'][2]
