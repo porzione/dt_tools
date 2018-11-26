@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'pp'
 require 'optparse'
 require 'ostruct'
 require 'sequel'
@@ -13,36 +12,35 @@ OptionParser.new do |opts|
   opts.on('-n TAG', 'New tag')    { |t| o.new_tag = t }
 end.parse!
 
-db_base_path = "#{ENV['HOME']}/.config/darktable"
-DB_DATA = Sequel.connect "sqlite://#{db_base_path}/data.db"
-DB_LIB  = Sequel.connect "sqlite://#{db_base_path}/library.db"
+DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
+DB_DATA = Sequel.connect "sqlite://#{DB_BASE_PATH}/data.db"
+DB_LIB  = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
 
 if o.delete_tag
-  res = DB_DATA[:tags].where(:name => o.delete_tag)
+  res = DB_DATA[:tags].where(name: o.delete_tag)
   if res.empty?
     abort "no tag '#{o.delete_tag}'"
   else
     id = res.first[:id]
   end
   puts "id: #{id}"
-  printf "tags: %d\n", DB_DATA[:tags].where(:id => id).delete
-  printf "used_tags: %d\n", DB_LIB[:used_tags].where(:id => id).delete
-  printf "tagged_images: %d\n", DB_LIB[:tagged_images].where(:tagid => id).delete
+  printf "tags: %d\n", DB_DATA[:tags].where(id: id).delete
+  printf "used_tags: %d\n", DB_LIB[:used_tags].where(id: id).delete
+  printf "tagged_images: %d\n", DB_LIB[:tagged_images].where(tagid: id).delete
 elsif o.rename_tag && o.new_tag
-  # puts "rename args: #{o.rename_tag} -> #{o.new_tag}"
-  puts DB_DATA[:tags].where(:name => o.rename_tag).update(name: o.new_tag)
-  puts DB_LIB[:used_tags].where(:name => o.rename_tag).update(name: o.new_tag)
+  puts DB_DATA[:tags].where(name: o.rename_tag).update(name: o.new_tag)
+  puts DB_LIB[:used_tags].where(name: o.rename_tag).update(name: o.new_tag)
   DB_DATA[:tags].where(Sequel.like(:name, "%#{o.rename_tag}%")).each do |row|
     new_name = row[:name].sub o.rename_tag, o.new_tag
-    res = DB_DATA[:tags].where(:id => row[:id]).update(name: new_name)
+    res = DB_DATA[:tags].where(id: row[:id]).update(name: new_name)
     puts "#{row[:name]} -> #{new_name}: #{res}"
   end
-  DB_LIB[:used_tags].where(Sequel.like(:name, "%#{o.rename_tag}%")).each do |row|
+  like = Sequel.like(:name, "%#{o.rename_tag}%")
+  DB_LIB[:used_tags].where(like).each do |row|
     new_name = row[:name].sub o.rename_tag, o.new_tag
-    res = DB_LIB[:used_tags].where(:id => row[:id]).update(name: new_name)
+    res = DB_LIB[:used_tags].where(id: row[:id]).update(name: new_name)
     puts "#{row[:name]} -> #{new_name}: #{res}"
   end
 else
-  DB_DATA[:tags].order(:name).each{|r| puts r[:name] }
+  DB_DATA[:tags].order(:name).each { |r| puts r[:name] }
 end
-

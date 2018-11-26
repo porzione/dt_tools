@@ -6,6 +6,7 @@ require 'sequel'
 require 'json'
 require 'active_support/core_ext/string'
 
+# All in one restore class
 class Restore
   DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
   DB_LIB  = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
@@ -17,11 +18,11 @@ class Restore
   Op = Struct.new :dry, :v, :vv, :force, :add, :del, :no_geo, :no_meta
 
   def initialize
+    @ignore_tags = []
     optparse
   end
 
   def optparse
-    @ignore_tags = []
     @o = Op.new
     OptionParser.new do |opts|
       opts.on('-n',   'dry run') { @o.dry   = true }
@@ -77,13 +78,13 @@ class Restore
     end
   end
 
-  def process_meta(ih, img)
+  def process_meta(ihsh, img)
     db_k = {}
-    res = DB_LIB[:meta_data].where(id: ih[:id]).each do |row|
+    res = DB_LIB[:meta_data].where(id: ihsh[:id]).each do |row|
       db_k[[row[:id], row[:key]]] = row[:value]
     end
     img.meta['k'].each_pair do |k, v|
-      db_kk = [ih[:id], k.to_i]
+      db_kk = [ihsh[:id], k.to_i]
       if db_k[db_kk] == v
         puts "same k: #{db_kk} => #{db_k[db_kk].truncate(40)}" if @o.vv
         db_k.delete db_kk
@@ -93,8 +94,13 @@ class Restore
       if @o.dry
         res = 'DRY'
       else
-        res = DB_LIB[:meta_data].where(id: ih[:id], key: k).update(value: v)
-        res = DB_LIB[:meta_data].insert(id: ih[:id], key: k, value: v) if res.zero?
+        res = DB_LIB[:meta_data]
+              .where(id: ihsh[:id], key: k)
+              .update(value: v)
+        if res.zero?
+          res = DB_LIB[:meta_data]
+                .insert(id: ihsh[:id], key: k, value: v)
+        end
       end
       puts "ch k:#{k} #{v} res:#{res}" # if @o.v
     end
@@ -109,9 +115,9 @@ class Restore
     end
   end
 
-  def process_tags(ih, img)
+  def process_tags(ihsh, img)
     tags = img.meta['tags'] || []
-    imgid = ih[:id]
+    imgid = ihsh[:id]
     tids = DB_LIB[:tagged_images]
            .where(imgid: imgid)
            .all.map { |t| t[:tagid] }
@@ -148,6 +154,7 @@ class Restore
         tag_del(imgid, diff) unless @o.dry
       end
     end
+    puts 'tags over' if @o.vv
   end
 
   def tag_add(imgid, tags)
@@ -180,14 +187,14 @@ class Restore
     end
   end
 
-  def process_geo(ih, geo)
+  def process_geo(ihsh, geo)
     raise 'no geo data' unless geo
 
     nr = { write_timestamp: Time.now.to_i }
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
-    if ih.slice(*GEO) == nr.slice(*GEO)
+    if ihsh.slice(*GEO) == nr.slice(*GEO)
       puts 'same geo' if @o.vv
     else
       res = @o.dry ? 'DRY' : DB_LIB[:images].where(id: ih[:id]).update(nr)

@@ -1,11 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-#require 'pp'
 require 'sequel'
 
-db_base_path = "#{ENV['HOME']}/.config/darktable"
-DB_LIB  = Sequel.connect "sqlite://#{db_base_path}/library.db"
+DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
+DB_LIB = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
 
 DB_LIB[:film_rolls].order(:folder).all do |roll|
   dir = roll[:folder]
@@ -15,11 +14,9 @@ DB_LIB[:film_rolls].order(:folder).all do |roll|
   end
   Dir.entries(dir).each do |file|
     next unless File.file?("#{dir}/#{file}")
-    next if /\.(xmp|pto|pp3|xcf|orig)$/i =~ file
-    #if res = DB_LIB[:images].where(film_id: roll[:id], filename: file).first
-    #  pp res.to_hash
-    #end
-    if DB_LIB[:images].where(film_id: roll[:id], filename: file).count == 0
+    next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
+
+    if DB_LIB[:images].where(film_id: roll[:id], filename: file).count.zero?
       puts "#{dir}/#{file}"
     end
   end
