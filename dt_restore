@@ -2,19 +2,19 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require 'ostruct'
 require 'sequel'
 require 'json'
 require 'active_support/core_ext/string'
-
 
 class Restore
   DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
   DB_LIB  = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
   DB_DATA = Sequel.connect "sqlite://#{DB_BASE_PATH}/data.db"
-  GEO = :longitude, :latitude, :altitude
+  GEO = %i[longitude latitude altitude].freeze
 
   Image = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
+
+  Op = Struct.new :dry, :v, :vv, :force, :add, :del, :no_geo, :no_meta
 
   def initialize
     optparse
@@ -22,15 +22,14 @@ class Restore
 
   def optparse
     @ignore_tags = []
-    @o = OpenStruct.new
+    @o = Op.new
     OptionParser.new do |opts|
       opts.on('-n',   'dry run') { @o.dry   = true }
       opts.on('-v',   'verbose') { @o.v     = true }
       opts.on('--vv', 'very -v') { @o.vv    = true }
       opts.on('-f',   'force')   { @o.force = true }
-      # tags
-      opts.on('-a', 'add')       { @o.add = true }
-      opts.on('-d', 'del')       { @o.del = true }
+      opts.on('-a', 'add tags')  { @o.add = true }
+      opts.on('-d', 'del tags')  { @o.del = true }
       opts.on('--ng', 'no geo')  { @o.no_geo = true }
       opts.on('--nm', 'no meta') { @o.no_meta = true }
       opts.on('-i T', 'Ignore')  { |t| @ignore_tags << t }
@@ -54,31 +53,31 @@ class Restore
     end
   end
 
-  def process_image img
+  def process_image(img)
     puts "j: #{img.file} m:#{img.meta}" if @o.vv
     res = DB_LIB[:images]
-      .select(:id, :write_timestamp, *GEO)
-      .where(film_id: img.roll_id, filename: img.file, version: img.ver)
+          .select(:id, :write_timestamp, *GEO)
+          .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if res.empty?
       warn "NO IMAGE IN DB: #{img.roll_name}/#{img.file} v:#{img.ver}"
     else
       res.each do |i|
-        ih = i.to_hash.select{ |k, v| v }
+        ih = i.to_hash.select { |_, v| v }
         if ih[:write_timestamp] >= img.meta['t']
           puts "#{img.file}:#{img.ver} is newer" if @o.vv
           next unless @o.force
-        else
-          puts "#{img.file}:#{img.ver} is older" if @o.v
+        elsif @o.v
+          puts "#{img.file}:#{img.ver} is older"
         end
         puts "db: #{ih}" if @o.vv
         process_geo(ih, img.meta['geo']) if img.meta.key?('geo') && !@o.no_geo
-        process_meta(ih, img)
+        process_meta(ih, img) unless @o.no_meta
         process_tags(ih, img)
       end
     end
   end
 
-  def process_meta ih, img
+  def process_meta(ih, img)
     db_k = {}
     res = DB_LIB[:meta_data].where(id: ih[:id]).each do |row|
       db_k[[row[:id], row[:key]]] = row[:value]
@@ -95,59 +94,63 @@ class Restore
         res = 'DRY'
       else
         res = DB_LIB[:meta_data].where(id: ih[:id], key: k).update(value: v)
-        res = DB_LIB[:meta_data].insert(id: ih[:id], key: k, value: v) if res == 0
+        res = DB_LIB[:meta_data].insert(id: ih[:id], key: k, value: v) if res.zero?
       end
       puts "ch k:#{k} #{v} res:#{res}" # if @o.v
     end
     db_k.keys.each do |del|
       d_id, d_k = del
       next if d_k == 2 # title
+
       puts "ch del k: #{d_id} #{d_k} #{db_k[del]}" # if @o.v
       next if @o.dry
+
       puts DB_LIB[:meta_data].where(id: d_id, key: d_k).delete
     end
   end
 
-  def process_tags ih, img
+  def process_tags(ih, img)
     tags = img.meta['tags'] || []
     imgid = ih[:id]
     tids = DB_LIB[:tagged_images]
-      .where(imgid: imgid)
-      .all.map{ |t| t[:tagid] }
+           .where(imgid: imgid)
+           .all.map { |t| t[:tagid] }
     db_tags = []
     db_dt_tags = []
-    DB_LIB[:used_tags].where(id: tids).map{ |t| t[:name] }.each do |t|
-      t =~ /^darktable\|.+/ ? db_dt_tags.push(t) : db_tags.push(t)
+    DB_LIB[:used_tags].where(id: tids).map { |t| t[:name] }.each do |t|
+      t.match?(/^darktable\|.+/) ? db_dt_tags.push(t) : db_tags.push(t)
     end
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
-    if tags != db_tags
-      photo = "#{img.roll_name}/#{img.file} #{imgid}"
-      if @o.add
-        diff = []
-        (tags - db_tags).each do |nt|
-          next if @ignore_tags.include?(nt)
-          diff << nt if db_tags.select{ |dt| "dt".index("#{nt}|") == 0 }.empty?
-        end
-        if diff.length > 0
-          puts "ch #{photo} add:#{diff}"
-          tag_add(imgid, diff) unless @o.dry
-        end
+    return if tags == db_tags
+
+    photo = "#{img.roll_name}/#{img.file} #{imgid}"
+    if @o.add
+      diff = []
+      (tags - db_tags).each do |nt|
+        next if @ignore_tags.include?(nt)
+
+        diff << nt if db_tags.select { |dt| dt.index("#{nt}|").zero? }.empty?
       end
-      if @o.del
-        diff = []
-        (db_tags - tags).each do |nt|
-          next if @ignore_tags.include?(nt)
-          diff << nt
-        end
-        if diff.length > 0
-          puts "ch #{photo} del:#{diff}"
-          tag_del(imgid, diff) unless @o.dry
-        end
+      unless diff.empty?
+        puts "ch #{photo} add:#{diff}"
+        tag_add(imgid, diff) unless @o.dry
+      end
+    end
+    if @o.del
+      diff = []
+      (db_tags - tags).each do |nt|
+        next if @ignore_tags.include?(nt)
+
+        diff << nt
+      end
+      unless diff.empty?
+        puts "ch #{photo} del:#{diff}"
+        tag_del(imgid, diff) unless @o.dry
       end
     end
   end
 
-  def tag_add imgid, tags
+  def tag_add(imgid, tags)
     tags.each do |t|
       res = DB_LIB[:used_tags].where(name: t)
       if res.empty?
@@ -164,21 +167,22 @@ class Restore
     end
   end
 
-  def tag_del imgid, tags
+  def tag_del(imgid, tags)
     tags.each do |t|
       id = DB_LIB[:used_tags].where(name: t).first[:id]
       puts "ch del t:#{t} id:#{id}"
       puts DB_LIB[:tagged_images].where(imgid: imgid, tagid: id).delete
-      if DB_LIB[:tagged_images].where(tagid: id).count == 0
-        r1 = DB_LIB[:used_tags].where(id: id).delete
-        r2 = DB_DATA[:tags].where(id: id).delete
-        puts "ch no more used ut:#{r1} t:#{r2}"
-      end
+      next unless DB_LIB[:tagged_images].where(tagid: id).count.zero?
+
+      r1 = DB_LIB[:used_tags].where(id: id).delete
+      r2 = DB_DATA[:tags].where(id: id).delete
+      puts "ch no more used ut:#{r1} t:#{r2}"
     end
   end
 
-  def process_geo ih, geo
+  def process_geo(ih, geo)
     raise 'no geo data' unless geo
+
     nr = { write_timestamp: Time.now.to_i }
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
@@ -190,7 +194,6 @@ class Restore
       puts "ch geo: #{nr} res: #{res}" if @o.v || @o.vv
     end
   end
-
 end
 
 restore = Restore.new
