@@ -1,3 +1,6 @@
+# *WARNING* backup your Darktable database before any actions
+# usually it located in ~/.config/darktable/*.db
+
 # Delete, rename, create tags
 
 dtag
