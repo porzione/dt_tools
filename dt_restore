@@ -46,13 +46,13 @@ class Restore
       images.each_pair do |jfile|
         file = jfile[0]
         jfile[1].each do |ver, meta|
-          process_image file, ver, meta, roll_id
+          process_image file, ver, meta, roll_id, roll_name
         end
       end
     end
   end
 
-  def process_image file, ver, meta, roll_id
+  def process_image file, ver, meta, roll_id, roll_name
     puts "j: #{file} m:#{meta}" if @o.vv
     res = DB_LIB[:images]
       .select(:id, :write_timestamp, *GEO)
@@ -123,7 +123,7 @@ class Restore
       if @o.add
         diff = []
         (tags - db_tags).each do |nt|
-          next if ignore_tags.include?(nt)
+          next if @ignore_tags.include?(nt)
           diff << nt if db_tags.select{ |dt| "dt".index("#{nt}|") == 0 }.empty?
         end
         if diff.length > 0
@@ -134,7 +134,7 @@ class Restore
       if @o.del
         diff = []
         (db_tags - tags).each do |nt|
-          next if ignore_tags.include?(nt)
+          next if @ignore_tags.include?(nt)
           diff << nt
         end
         if diff.length > 0
