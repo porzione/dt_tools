@@ -7,11 +7,14 @@ require 'sequel'
 require 'json'
 require 'active_support/core_ext/string'
 
+
 class Restore
   DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
   DB_LIB  = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
   DB_DATA = Sequel.connect "sqlite://#{DB_BASE_PATH}/data.db"
   GEO = :longitude, :latitude, :altitude
+
+  Image = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
 
   def initialize
     optparse
@@ -40,19 +43,12 @@ class Restore
       if res.empty?
         warn "NO ROLL: #{roll_name}"
         next
-      else
-        roll_id = res.first[:id]
       end
+      roll_id = res.first[:id]
       images.each_pair do |jfile|
         file = jfile[0]
         jfile[1].each do |ver, meta|
-          process_image OpenStruct.new(
-            file: file,
-            ver:  ver,
-            meta: meta,
-            roll_id: roll_id,
-            roll_name: roll_name
-          )
+          process_image Image.new(file, ver, meta, roll_id, roll_name)
         end
       end
     end
