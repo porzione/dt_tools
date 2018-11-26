@@ -46,42 +46,48 @@ class Restore
       images.each_pair do |jfile|
         file = jfile[0]
         jfile[1].each do |ver, meta|
-          process_image file, ver, meta, roll_id, roll_name
+          process_image OpenStruct.new(
+            file: file,
+            ver:  ver,
+            meta: meta,
+            roll_id: roll_id,
+            roll_name: roll_name
+          )
         end
       end
     end
   end
 
-  def process_image file, ver, meta, roll_id, roll_name
-    puts "j: #{file} m:#{meta}" if @o.vv
+  def process_image img
+    puts "j: #{img.file} m:#{img.meta}" if @o.vv
     res = DB_LIB[:images]
       .select(:id, :write_timestamp, *GEO)
-      .where(film_id: roll_id, filename: file, version: ver)
+      .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if res.empty?
-      warn "NO IMAGE IN DB: #{roll_name}/#{file} v:#{ver}"
+      warn "NO IMAGE IN DB: #{img.roll_name}/#{img.file} v:#{img.ver}"
     else
-      res.each do |img|
-        i = img.to_hash.select{ |k, v| v }
-        if i[:write_timestamp] >= meta['t']
-          puts "#{file}:#{ver} is newer" if @o.vv
+      res.each do |i|
+        ih = i.to_hash.select{ |k, v| v }
+        if ih[:write_timestamp] >= img.meta['t']
+          puts "#{img.file}:#{img.ver} is newer" if @o.vv
           next unless @o.force
         else
-          puts "#{file}:#{ver} is older" if @o.v
+          puts "#{img.file}:#{img.ver} is older" if @o.v
         end
-        puts "db: #{i}" if @o.vv
-        process_geo(i, meta['geo']) if meta.key?('geo') && !@o.no_geo
-        process_meta(i, meta)
-        process_tags(i, meta, file)
+        puts "db: #{ih}" if @o.vv
+        process_geo(ih, img.meta['geo']) if img.meta.key?('geo') && !@o.no_geo
+        process_meta(ih, img)
+        process_tags(ih, img)
       end
     end
   end
 
-  def process_meta ih, meta
+  def process_meta ih, img
     db_k = {}
     res = DB_LIB[:meta_data].where(id: ih[:id]).each do |row|
       db_k[[row[:id], row[:key]]] = row[:value]
     end
-    meta['k'].each_pair do |k, v|
+    img.meta['k'].each_pair do |k, v|
       db_kk = [ih[:id], k.to_i]
       if db_k[db_kk] == v
         puts "same k: #{db_kk} => #{db_k[db_kk].truncate(40)}" if @o.vv
@@ -106,8 +112,8 @@ class Restore
     end
   end
 
-  def process_tags ih, meta, file
-    tags = meta['tags'] || []
+  def process_tags ih, img
+    tags = img.meta['tags'] || []
     imgid = ih[:id]
     tids = DB_LIB[:tagged_images]
       .where(imgid: imgid)
@@ -119,7 +125,7 @@ class Restore
     end
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
     if tags != db_tags
-      photo = "#{imgid} #{file}"
+      photo = "#{img.roll_name}/#{img.file} #{imgid}"
       if @o.add
         diff = []
         (tags - db_tags).each do |nt|
