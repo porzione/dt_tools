@@ -1,0 +1,39 @@
+#!/bin/bash
+
+source './meta.conf'
+
+usage() { echo "Usage: $0 [-r <remote hostame>] [-d <remote directory>]" 1>&2; exit 1; }
+
+while getopts ":r:d:" o; do
+  case "${o}" in
+    r)
+      r=${OPTARG}
+      ;;
+    d)
+      d=${OPTARG}
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ -z "${r}" ]; then
+  r=${default_remote}
+fi
+
+if [ -z "${d}" ]; then
+  d=$(pwd)
+fi
+
+f="z_$(hostname).json"
+
+echo "remote=${r}"
+echo "dir=${d}"
+echo "file=${f}"
+
+./dt_dump > $f
+
+#scp -C ${f} ${r}:${d}
+rsync -v --compress-level=9 ${f} ${r}:${d}

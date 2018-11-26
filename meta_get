@@ -1,0 +1,36 @@
+#!/bin/bash
+
+remote=$1
+dir=$2
+
+source './meta.conf'
+
+usage() { echo "Usage: $0 [-r <remote hostame>] [-d <remote directory>]" 1>&2; exit 1; }
+
+while getopts ":r:d:" o; do
+  case "${o}" in
+    r)
+      r=${OPTARG}
+      ;;
+    d)
+      d=${OPTARG}
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ -z "${r}" ]; then
+  r=${default_remote}
+fi
+
+if [ -z "${d}" ]; then
+  d=$(pwd)
+fi
+
+echo "remote=${r}"
+echo "dir=${d}"
+
+ssh ${r} "eval \"\$(~/.rbenv/bin/rbenv init -)\"; cd ${d} ; bundle exec ./dt_dump | gzip" | gunzip > z_${r}.json
