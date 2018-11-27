@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require_relative 'models'
 require 'oj'
+require_relative 'models'
 
 GEO = %i[longitude latitude altitude].freeze
 
@@ -22,17 +22,17 @@ FilmRoll.order(:folder).all do |roll|
     meta[:k] = MetaData
                .select(:key, :value)
                .where(id: img.id)
-      .map { |r| [r.key, r.value] }.to_h
+               .map { |r| [r.key, r.value] }.to_h
     meta[:t] = img.write_timestamp
     f = img.filename
     data[d][f] = {} unless data[d][f]
     data[d][f][ img.version ] = meta
     tids = TaggedImage
            .where(imgid: img.id)
-      .map { |t| t.tagid }
+           .select_map(:tagid)
     tags = UsedTag
            .where(id: tids)
-           .map { |t| t.name }
+           .select_map(:name)
            .reject { |t| t.match?(/^darktable\|.+/) }
     data[d][f][img.version][:tags] = tags unless tags.empty?
   end

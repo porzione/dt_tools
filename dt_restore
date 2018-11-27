@@ -2,9 +2,9 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require_relative 'models'
 require 'json'
 require 'active_support/core_ext/string'
+require_relative 'models'
 
 # All in one restore class
 class Restore
@@ -124,12 +124,9 @@ class Restore
     tids = TaggedImage
            .where(imgid: imgid)
            .map(&:tagid)
-    db_tags = []
-    db_dt_tags = []
-    # TODO: benchmark order vs sort
-    UsedTag.where(id: tids).order(:name).map(&:name).each do |t|
-      t.match?(/^darktable\|.+/) ? db_dt_tags.push(t) : db_tags.push(t)
-    end
+    db_tags = UsedTag.where(id: tids).order(:name)
+                     .select_map(:name)
+                     .reject { |t| t.match?(/^darktable\|.+/) }
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
     return if tags == db_tags
 
