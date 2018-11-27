@@ -4,7 +4,7 @@
 require 'pp'
 require 'optparse'
 require 'ostruct'
-require 'sequel'
+require_relative 'models'
 
 o = OpenStruct.new
 OptionParser.new do |opts|
@@ -13,46 +13,51 @@ OptionParser.new do |opts|
   opts.on('-c',   'cleanup') { o.c  = true }
   opts.on('-f',   'fixdb')   { o.f  = true }
   opts.on('-r',   'rolls')   { o.r  = true }
+  opts.on('-s',   'stats')   { o.s  = true }
 end.parse!
 o.v = true if o.vv
 
-db_base_path = "#{ENV['HOME']}/.config/darktable"
-DB_LIB  = Sequel.connect "sqlite://#{db_base_path}/library.db"
-
 ids = []
 dfilms = []
-DB_LIB[:film_rolls].order(:folder).all do |roll|
-  DB_LIB[:images]
+FilmRoll.order(:folder).all do |roll|
+  Image
     .select(:id, :filename, :version)
     .where(film_id: roll[:id])
     .order(:filename, :version)
     .each do |img|
     fp = "#{roll[:folder]}/#{img[:filename]}"
     if o.c && !File.exist?(fp)
-      res_i = DB_LIB[:images].where(id: img[:id]).delete
-      res_m = DB_LIB[:meta_data].where(id: img[:id]).delete
-      res_t = DB_LIB[:tagged_images].where(imgid: img[:id]).delete
+      res_i = Image.where(id: img[:id]).delete
+      res_m = MetaData.where(id: img[:id]).delete
+      res_t = TaggedImage.where(imgid: img[:id]).delete
       puts "cleanup: #{fp} i:#{res_i} m:#{res_m} t:#{res_t}"
     end
     ids << img[:id] if o.f
   end
   if o.r
-    c = DB_LIB[:images].where(film_id: roll[:id]).count
+    c = Image.where(film_id: roll[:id]).count
     puts "#{roll[:id]} #{roll[:folder]} #{c}" if o.vv
     dfilms << roll[:id] if c == 0
   end
 end
 
 if o.r && !dfilms.empty?
-  res = DB_LIB[:film_rolls].where(id: dfilms).delete
+  res = FilmRoll.where(id: dfilms).delete
   puts "del films: #{dfilms} #{res}"
 end
 
 if o.f
-  res_m = DB_LIB[:meta_data].exclude(id: ids).delete
-  res_t = DB_LIB[:tagged_images].exclude(imgid: ids).delete
-  puts "orphans: m:#{res_m} t:#{res_t}" if o.v
-  DB_LIB.run 'VACUUM'
+  res_m = MetaData.exclude(id: ids).delete
+  res_t = TaggedImage.exclude(imgid: ids).delete
+  puts "orphans: metadata:#{res_m} tagged images:#{res_t}" if o.v
+  Image.db.run 'VACUUM'
 end
 
-puts "total images: #{ DB_LIB[:images].count }" if o.v
+if o.s
+  puts "rolls:    #{FilmRoll.count}"
+  puts "images:   #{Image.count}"
+  puts "t.images: #{TaggedImage.count}"
+  puts "u.tags:   #{UsedTag.count}"
+  puts "metadata: #{MetaData.count}"
+  puts "tags:     #{Tag.count}"
+end

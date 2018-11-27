@@ -1,26 +1,17 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'sequel'
+require_relative 'models'
 require 'oj'
 
 GEO = %i[longitude latitude altitude].freeze
 
-DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
-DB_LIB = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
-
-# M_CREATOR   = 0
-# M_PUBLISHER = 1
-# M_TITLE     = 2
-# M_DESCR     = 3
-# M_RIGHTS    = 4
-
 data = {}
 
-DB_LIB[:film_rolls].order(:folder).all do |roll|
+FilmRoll.order(:folder).all do |roll|
   d = roll[:folder]
   data[d] = {}
-  DB_LIB[:images]
+  Image
     .select(:id, :filename, :version, :write_timestamp, *GEO)
     .where(film_id: roll[:id])
     .order(:filename, :version)
@@ -28,7 +19,7 @@ DB_LIB[:film_rolls].order(:folder).all do |roll|
     meta = {}
     geo = img.to_hash.slice(*GEO).values.select { |v| v }
     meta[:geo] = geo unless geo.empty?
-    meta[:k] = DB_LIB[:meta_data]
+    meta[:k] = MetaData
                .select(:key, :value)
                .where(id: img[:id])
                .map { |r| [r[:key], r[:value]] }.to_h
@@ -36,10 +27,10 @@ DB_LIB[:film_rolls].order(:folder).all do |roll|
     f = img[:filename]
     data[d][f] = {} unless data[d][f]
     data[d][f][ img[:version] ] = meta
-    tids = DB_LIB[:tagged_images]
+    tids = TaggedImage
            .where(imgid: img[:id])
            .map { |t| t[:tagid] }
-    tags = DB_LIB[:used_tags]
+    tags = UsedTag
            .where(id: tids)
            .map { |t| t[:name] }
            .reject { |t| t.match?(/^darktable\|.+/) }

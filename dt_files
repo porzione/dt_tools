@@ -1,22 +1,19 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'sequel'
+require_relative 'models'
 
-DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
-DB_LIB = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
-
-DB_LIB[:film_rolls].order(:folder).all do |roll|
+FilmRoll.order(:folder).all do |roll|
   dir = roll[:folder]
   unless Dir.exist?(dir)
-    warn "NO DIR:#{roll[:id]} #{dir}"
+    warn "no dir:#{roll[:id]} #{dir}"
     next
   end
   Dir.entries(dir).each do |file|
     next unless File.file?("#{dir}/#{file}")
     next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
 
-    if DB_LIB[:images].where(film_id: roll[:id], filename: file).count.zero?
+    if Image.where(film_id: roll[:id], filename: file).count.zero?
       puts "#{dir}/#{file}"
     end
   end

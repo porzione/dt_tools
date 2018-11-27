@@ -2,15 +2,12 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require 'sequel'
+require_relative 'models'
 require 'json'
 require 'active_support/core_ext/string'
 
 # All in one restore class
 class Restore
-  DB_BASE_PATH = "#{ENV['HOME']}/.config/darktable"
-  DB_LIB  = Sequel.connect "sqlite://#{DB_BASE_PATH}/library.db"
-  DB_DATA = Sequel.connect "sqlite://#{DB_BASE_PATH}/data.db"
   GEO = %i[longitude latitude altitude].freeze
 
   Image = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
@@ -39,9 +36,9 @@ class Restore
 
   def parse_in
     JSON.parse(ARGF.read).each_pair do |roll_name, images|
-      res = DB_LIB[:film_rolls].where(folder: roll_name)
+      res = FilmRoll.where(folder: roll_name)
       if res.empty?
-        warn "NO ROLL: #{roll_name}"
+        warn "no roll: #{roll_name}"
         next
       end
       roll_id = res.first[:id]
@@ -56,11 +53,11 @@ class Restore
 
   def process_image(img)
     puts "j: #{img.file} m:#{img.meta}" if @o.vv
-    res = DB_LIB[:images]
+    res = Image
           .select(:id, :write_timestamp, *GEO)
           .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if res.empty?
-      warn "NO IMAGE IN DB: #{img.roll_name}/#{img.file} v:#{img.ver}"
+      warn "no image in db: #{img.roll_name}/#{img.file} v:#{img.ver}"
     else
       res.each do |i|
         ih = i.to_hash.select { |_, v| v }
@@ -80,7 +77,7 @@ class Restore
 
   def process_meta(ihsh, img)
     db_k = {}
-    res = DB_LIB[:meta_data].where(id: ihsh[:id]).each do |row|
+    res = MetaData.where(id: ihsh[:id]).each do |row|
       db_k[[row[:id], row[:key]]] = row[:value]
     end
     img.meta['k'].each_pair do |k, v|
@@ -94,11 +91,11 @@ class Restore
       if @o.dry
         res = 'DRY'
       else
-        res = DB_LIB[:meta_data]
+        res = MetaData
               .where(id: ihsh[:id], key: k)
               .update(value: v)
         if res.zero?
-          res = DB_LIB[:meta_data]
+          res = MetaData
                 .insert(id: ihsh[:id], key: k, value: v)
         end
       end
@@ -111,19 +108,19 @@ class Restore
       puts "ch del k: #{d_id} #{d_k} #{db_k[del]}" # if @o.v
       next if @o.dry
 
-      puts DB_LIB[:meta_data].where(id: d_id, key: d_k).delete
+      puts MetaData.where(id: d_id, key: d_k).delete
     end
   end
 
   def process_tags(ihsh, img)
     tags = img.meta['tags'] || []
     imgid = ihsh[:id]
-    tids = DB_LIB[:tagged_images]
+    tids = TaggedImage
            .where(imgid: imgid)
            .all.map { |t| t[:tagid] }
     db_tags = []
     db_dt_tags = []
-    DB_LIB[:used_tags].where(id: tids).map { |t| t[:name] }.each do |t|
+    UsedTag.where(id: tids).map { |t| t[:name] }.each do |t|
       t.match?(/^darktable\|.+/) ? db_dt_tags.push(t) : db_tags.push(t)
     end
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
@@ -159,30 +156,30 @@ class Restore
 
   def tag_add(imgid, tags)
     tags.each do |t|
-      res = DB_LIB[:used_tags].where(name: t)
+      res = UsedTag.where(name: t)
       if res.empty?
-        newid = DB_LIB[:used_tags].max(:id) + 1
+        newid = UsedTag.max(:id) + 1
         puts "ch new t:#{t} id:#{newid}"
-        puts DB_LIB[:used_tags].insert(id: newid, name: t)
-        puts DB_LIB[:tagged_images].insert(imgid: imgid, tagid: newid)
-        puts DB_DATA[:tags].insert(id: newid, name: t)
+        puts UsedTag.insert(id: newid, name: t)
+        puts TaggedImage.insert(imgid: imgid, tagid: newid)
+        puts Tag.insert(id: newid, name: t)
       else
         id = res.first[:id]
         puts "ch add t:#{t} id:#{id}"
-        puts DB_LIB[:tagged_images].insert(imgid: imgid, tagid: id)
+        puts TaggedImage.insert(imgid: imgid, tagid: id)
       end
     end
   end
 
   def tag_del(imgid, tags)
     tags.each do |t|
-      id = DB_LIB[:used_tags].where(name: t).first[:id]
+      id = UsedTag.where(name: t).first[:id]
       puts "ch del t:#{t} id:#{id}"
-      puts DB_LIB[:tagged_images].where(imgid: imgid, tagid: id).delete
-      next unless DB_LIB[:tagged_images].where(tagid: id).count.zero?
+      puts TaggedImage.where(imgid: imgid, tagid: id).delete
+      next unless TaggedImage.where(tagid: id).count.zero?
 
-      r1 = DB_LIB[:used_tags].where(id: id).delete
-      r2 = DB_DATA[:tags].where(id: id).delete
+      r1 = UsedTag.where(id: id).delete
+      r2 = Tag.where(id: id).delete
       puts "ch no more used ut:#{r1} t:#{r2}"
     end
   end
@@ -197,7 +194,7 @@ class Restore
     if ihsh.slice(*GEO) == nr.slice(*GEO)
       puts 'same geo' if @o.vv
     else
-      res = @o.dry ? 'DRY' : DB_LIB[:images].where(id: ih[:id]).update(nr)
+      res = @o.dry ? 'DRY' : Image.where(id: ih[:id]).update(nr)
       puts "ch geo: #{nr} res: #{res}" if @o.v || @o.vv
     end
   end
