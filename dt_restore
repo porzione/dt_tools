@@ -119,14 +119,15 @@ class Restore
       @o.v  = true
       @o.vv = true
     end
-    tags = img.meta['tags'] || []
+    tags = (img.meta['tags'] || []).sort
     imgid = ihsh[:id]
     tids = TaggedImage
            .where(imgid: imgid)
-           .all.map(&:tagid)
+           .map(&:tagid)
     db_tags = []
     db_dt_tags = []
-    UsedTag.where(id: tids).map(&:name).each do |t|
+    # TODO: benchmark order vs sort
+    UsedTag.where(id: tids).order(:name).map(&:name).each do |t|
       t.match?(/^darktable\|.+/) ? db_dt_tags.push(t) : db_tags.push(t)
     end
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
