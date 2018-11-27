@@ -115,17 +115,18 @@ class Restore
   def process_tags(ihsh, img)
     # magic start
     if img.file == 'P9250533.JPG'
-      old_v, old_vv = @o.v, @o.vv
-      @o.v, @o.vv = true, true
+      old_v = [@o.v, @o.vv]
+      @o.v  = true
+      @o.vv = true
     end
     tags = img.meta['tags'] || []
     imgid = ihsh[:id]
     tids = TaggedImage
            .where(imgid: imgid)
-           .all.map { |t| t.tagid }
+           .all.map(&:tagid)
     db_tags = []
     db_dt_tags = []
-    UsedTag.where(id: tids).map { |t| t.name }.each do |t|
+    UsedTag.where(id: tids).map(&:name).each do |t|
       t.match?(/^darktable\|.+/) ? db_dt_tags.push(t) : db_tags.push(t)
     end
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
@@ -137,6 +138,7 @@ class Restore
       db_tags_flat = db_tags.map { |dt| dt.split '|' }.flatten.uniq
       (tags - db_tags).each do |nt|
         next if @ignore_tags.include?(nt)
+
         diff << nt unless db_tags_flat.include?(nt)
       end
       unless diff.empty?
@@ -158,9 +160,7 @@ class Restore
     end
     puts 'tags over' if @o.vv
     # magic end
-    if img.file == 'P9250533.JPG'
-      @o.v, @o.vv = old_v, old_vv
-    end
+    @o.v, @o.vv = old_v if img.file == 'P9250533.JPG'
   end
 
   def tag_add(imgid, tags)
