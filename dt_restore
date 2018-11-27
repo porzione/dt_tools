@@ -113,6 +113,11 @@ class Restore
   end
 
   def process_tags(ihsh, img)
+    # magic start
+    if img.file == 'P9250533.JPG'
+      old_v, old_vv = @o.v, @o.vv
+      @o.v, @o.vv = true, true
+    end
     tags = img.meta['tags'] || []
     imgid = ihsh[:id]
     tids = TaggedImage
@@ -129,10 +134,10 @@ class Restore
     photo = "#{img.roll_name}/#{img.file} #{imgid}"
     if @o.add
       diff = []
+      db_tags_flat = db_tags.map { |dt| dt.split '|' }.flatten.uniq
       (tags - db_tags).each do |nt|
         next if @ignore_tags.include?(nt)
-
-        diff << nt if db_tags.select { |dt| dt.index("#{nt}|").zero? }.empty?
+        diff << nt unless db_tags_flat.include?(nt)
       end
       unless diff.empty?
         puts "ch #{photo} add:#{diff}"
@@ -152,6 +157,10 @@ class Restore
       end
     end
     puts 'tags over' if @o.vv
+    # magic end
+    if img.file == 'P9250533.JPG'
+      @o.v, @o.vv = old_v, old_vv
+    end
   end
 
   def tag_add(imgid, tags)
@@ -194,7 +203,7 @@ class Restore
     if ihsh.slice(*GEO) == nr.slice(*GEO)
       puts 'same geo' if @o.vv
     else
-      res = @o.dry ? 'DRY' : Image.where(id: ih[:id]).update(nr)
+      res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
       puts "ch geo: #{nr} res: #{res}" if @o.v || @o.vv
     end
   end
