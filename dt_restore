@@ -113,12 +113,6 @@ class Restore
   end
 
   def process_tags(ihsh, img)
-    # magic start
-    if img.file == 'P9250533.JPG'
-      old_v = [@o.v, @o.vv]
-      @o.v  = true
-      @o.vv = true
-    end
     tags = (img.meta['tags'] || []).sort
     imgid = ihsh[:id]
     tids = TaggedImage
@@ -157,8 +151,6 @@ class Restore
       end
     end
     puts 'tags over' if @o.vv
-    # magic end
-    @o.v, @o.vv = old_v if img.file == 'P9250533.JPG'
   end
 
   def tag_add(imgid, tags)
