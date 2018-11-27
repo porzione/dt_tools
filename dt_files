@@ -4,16 +4,16 @@
 require_relative 'models'
 
 FilmRoll.order(:folder).all do |roll|
-  dir = roll[:folder]
+  dir = roll.folder
   unless Dir.exist?(dir)
-    warn "no dir:#{roll[:id]} #{dir}"
+    warn "no dir:#{roll.id} #{dir}"
     next
   end
   Dir.entries(dir).each do |file|
     next unless File.file?("#{dir}/#{file}")
     next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
 
-    if Image.where(film_id: roll[:id], filename: file).count.zero?
+    if Image.where(film_id: roll.id, filename: file).count.zero?
       puts "#{dir}/#{file}"
     end
   end

@@ -17,7 +17,7 @@ if o.delete_tag
   if res.empty?
     abort "no tag '#{o.delete_tag}'"
   else
-    id = res.first[:id]
+    id = res.first.id
   end
   puts "id: #{id}"
   printf "tags: %d\n", Tag.where(id: id).delete
@@ -27,16 +27,16 @@ elsif o.rename_tag && o.new_tag
   puts Tag.where(name: o.rename_tag).update(name: o.new_tag)
   puts UsedTag.where(name: o.rename_tag).update(name: o.new_tag)
   Tag.where(Sequel.like(:name, "%#{o.rename_tag}%")).each do |row|
-    new_name = row[:name].sub o.rename_tag, o.new_tag
-    res = Tag.where(id: row[:id]).update(name: new_name)
-    puts "#{row[:name]} -> #{new_name}: #{res}"
+    new_name = row.name.sub o.rename_tag, o.new_tag
+    res = Tag.where(id: row.id).update(name: new_name)
+    puts "#{row.name} -> #{new_name}: #{res}"
   end
   like = Sequel.like(:name, "%#{o.rename_tag}%")
   UsedTag.where(like).each do |row|
-    new_name = row[:name].sub o.rename_tag, o.new_tag
-    res = UsedTag.where(id: row[:id]).update(name: new_name)
-    puts "#{row[:name]} -> #{new_name}: #{res}"
+    new_name = row.name.sub o.rename_tag, o.new_tag
+    res = UsedTag.where(id: row.id).update(name: new_name)
+    puts "#{row.name} -> #{new_name}: #{res}"
   end
 else
-  Tag.order(:name).each { |r| puts r[:name] }
+  Tag.order(:name).each { |r| puts r.name }
 end

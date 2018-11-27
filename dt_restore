@@ -41,7 +41,7 @@ class Restore
         warn "no roll: #{roll_name}"
         next
       end
-      roll_id = res.first[:id]
+      roll_id = res.first.id
       images.each_pair do |jfile|
         file = jfile[0]
         jfile[1].each do |ver, meta|
@@ -78,7 +78,7 @@ class Restore
   def process_meta(ihsh, img)
     db_k = {}
     res = MetaData.where(id: ihsh[:id]).each do |row|
-      db_k[[row[:id], row[:key]]] = row[:value]
+      db_k[[row.id, row.key]] = row.value
     end
     img.meta['k'].each_pair do |k, v|
       db_kk = [ihsh[:id], k.to_i]
@@ -122,10 +122,10 @@ class Restore
     imgid = ihsh[:id]
     tids = TaggedImage
            .where(imgid: imgid)
-           .all.map { |t| t[:tagid] }
+           .all.map { |t| t.tagid }
     db_tags = []
     db_dt_tags = []
-    UsedTag.where(id: tids).map { |t| t[:name] }.each do |t|
+    UsedTag.where(id: tids).map { |t| t.name }.each do |t|
       t.match?(/^darktable\|.+/) ? db_dt_tags.push(t) : db_tags.push(t)
     end
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
@@ -173,7 +173,7 @@ class Restore
         puts TaggedImage.insert(imgid: imgid, tagid: newid)
         puts Tag.insert(id: newid, name: t)
       else
-        id = res.first[:id]
+        id = res.first.id
         puts "ch add t:#{t} id:#{id}"
         puts TaggedImage.insert(imgid: imgid, tagid: id)
       end
@@ -182,7 +182,7 @@ class Restore
 
   def tag_del(imgid, tags)
     tags.each do |t|
-      id = UsedTag.where(name: t).first[:id]
+      id = UsedTag.where(name: t).first.id
       puts "ch del t:#{t} id:#{id}"
       puts TaggedImage.where(imgid: imgid, tagid: id).delete
       next unless TaggedImage.where(tagid: id).count.zero?
