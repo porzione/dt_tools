@@ -10,7 +10,7 @@ require 'active_support/core_ext/string'
 class Restore
   GEO = %i[longitude latitude altitude].freeze
 
-  Image = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
+  ImageSt = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
 
   Op = Struct.new :dry, :v, :vv, :force, :add, :del, :no_geo, :no_meta
 
@@ -45,7 +45,7 @@ class Restore
       images.each_pair do |jfile|
         file = jfile[0]
         jfile[1].each do |ver, meta|
-          process_image Image.new(file, ver, meta, roll_id, roll_name)
+          process_image ImageSt.new(file, ver, meta, roll_id, roll_name)
         end
       end
     end
