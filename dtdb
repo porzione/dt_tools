@@ -8,36 +8,47 @@ require_relative 'models'
 
 o = OpenStruct.new
 OptionParser.new do |opts|
-  opts.on('-v',   'verbose') { o.v  = true }
-  opts.on('--vv', 'very -v') { o.vv = true }
-  opts.on('-c',   'cleanup') { o.c  = true }
-  opts.on('-f',   'fixdb')   { o.f  = true }
-  opts.on('-r',   'rolls')   { o.r  = true }
-  opts.on('-s',   'stats')   { o.s  = true }
+  opts.on('-v',   'verbose')  { o.v  = true }
+  opts.on('--vv', 'very -v')  { o.vv = true }
+  opts.on('-c',   'cleanup')  { o.c  = true }
+  opts.on('-f',   'fixdb')    { o.f  = true }
+  opts.on('-r',   'rolls')    { o.r  = true }
+  opts.on('-s',   'stats')    { o.s  = true }
+  opts.on('--dh', 'dup hier') { o.dh = true }
 end.parse!
 o.v = true if o.vv
+
+if o.s
+  puts "rolls:    #{FilmRoll.count}"
+  puts "images:   #{Image.count}"
+  puts "t.images: #{TaggedImage.count}"
+  puts "u.tags:   #{UsedTag.count}"
+  puts "metadata: #{MetaData.count}"
+  puts "tags:     #{Tag.count}"
+  exit
+end
 
 ids = []
 dfilms = []
 FilmRoll.order(:folder).all do |roll|
   Image
     .select(:id, :filename, :version)
-    .where(film_id: roll[:id])
+    .where(film_id: roll.id)
     .order(:filename, :version)
     .each do |img|
-    fp = "#{roll[:folder]}/#{img[:filename]}"
+    fp = "#{roll.folder}/#{img.filename}"
     if o.c && !File.exist?(fp)
-      res_i = Image.where(id: img[:id]).delete
-      res_m = MetaData.where(id: img[:id]).delete
-      res_t = TaggedImage.where(imgid: img[:id]).delete
+      res_i = Image.where(id: img.id).delete
+      res_m = MetaData.where(id: img.id).delete
+      res_t = TaggedImage.where(imgid: img.id).delete
       puts "cleanup: #{fp} i:#{res_i} m:#{res_m} t:#{res_t}"
     end
-    ids << img[:id] if o.f
+    ids << img.id if o.f
   end
   if o.r
-    c = Image.where(film_id: roll[:id]).count
-    puts "#{roll[:id]} #{roll[:folder]} #{c}" if o.vv
-    dfilms << roll[:id] if c == 0
+    c = Image.where(film_id: roll.id).count
+    puts "#{roll.id} #{roll.folder} #{c}" if o.vv
+    dfilms << roll.id if c == 0
   end
 end
 
@@ -53,11 +64,14 @@ if o.f
   Image.db.run 'VACUUM'
 end
 
-if o.s
-  puts "rolls:    #{FilmRoll.count}"
-  puts "images:   #{Image.count}"
-  puts "t.images: #{TaggedImage.count}"
-  puts "u.tags:   #{UsedTag.count}"
-  puts "metadata: #{MetaData.count}"
-  puts "tags:     #{Tag.count}"
+if o.dh
+  Image.each do |i|
+    tids = TaggedImage.where(imgid: i.id).select_map(:tagid)
+    next if tids.empty?
+    ht = UsedTag.where(id: tids).select_map(:name)
+      .reject { |t| t.start_with? 'darktable' }
+      .select { |t| t.include? '|' }
+    puts "#{i.filename} #{ht}" if ht.length > 1
+  end
 end
+
