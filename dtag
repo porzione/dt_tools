@@ -13,11 +13,10 @@ OptionParser.new do |opts|
 end.parse!
 
 if o.delete_tag
-  res = Tag.where(name: o.delete_tag)
-  if res.empty?
-    abort "no tag '#{o.delete_tag}'"
+  if (tag = Tag.find(name: o.delete_tag))
+    id = tag.id
   else
-    id = res.first.id
+    abort "no tag '#{o.delete_tag}'"
   end
   puts "id: #{id}"
   printf "tags: %d\n", Tag.where(id: id).delete

@@ -48,7 +48,7 @@ FilmRoll.order(:folder).all do |roll|
   if o.r
     c = Image.where(film_id: roll.id).count
     puts "#{roll.id} #{roll.folder} #{c}" if o.vv
-    dfilms << roll.id if c == 0
+    dfilms << roll.id if c.zero?
   end
 end
 
@@ -68,10 +68,11 @@ if o.dh
   Image.each do |i|
     tids = TaggedImage.where(imgid: i.id).select_map(:tagid)
     next if tids.empty?
-    ht = UsedTag.where(id: tids).select_map(:name)
-      .reject { |t| t.start_with? 'darktable' }
-      .select { |t| t.include? '|' }
+
+    ht = UsedTag
+         .where(id: tids).select_map(:name)
+         .reject { |t| t.start_with? 'darktable' }
+         .select { |t| t.include? '|' }
     puts "#{i.filename} #{ht}" if ht.length > 1
   end
 end
-
