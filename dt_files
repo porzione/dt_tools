@@ -6,7 +6,7 @@ require_relative 'models'
 FilmRoll.order(:folder).all do |roll|
   dir = roll.folder
   unless Dir.exist?(dir)
-    warn "no dir:#{roll.id} #{dir}"
+    warn "no dir:#{dir}"
     next
   end
   Dir.entries(dir).each do |file|

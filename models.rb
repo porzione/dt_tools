@@ -19,12 +19,11 @@ class TaggedImage < Sequel::Model; end
 class UsedTag < Sequel::Model; end
 
 class MetaData < Sequel::Model(:meta_data)
-# M_CREATOR   = 0
-# M_PUBLISHER = 1
-# M_TITLE     = 2
-# M_DESCR     = 3
-# M_RIGHTS    = 4
+  # M_CREATOR   = 0
+  # M_PUBLISHER = 1
+  # M_TITLE     = 2
+  # M_DESCR     = 3
+  # M_RIGHTS    = 4
 end
 
 class Tag < Sequel::Model(DB_DATA); end
-
