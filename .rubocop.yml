@@ -12,8 +12,3 @@ Metrics/CyclomaticComplexity:
 
 Metrics/PerceivedComplexity:
   Enabled: false
-
-Metrics/BlockLength:
-  Exclude:
-    - 'dt_dump'
-  Enabled: true

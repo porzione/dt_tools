@@ -8,6 +8,17 @@ GEO = %i[longitude latitude altitude].freeze
 
 data = {}
 
+def get_tags(imgid)
+  tids = TaggedImage
+         .where(imgid: imgid)
+         .select_map(:tagid)
+
+  UsedTag
+    .where(id: tids)
+    .select_map(:name)
+    .reject { |t| t.match?(/^darktable\|.+/) }
+end
+
 FilmRoll.order(:folder).all do |roll|
   d = roll.folder
   data[d] = {}
@@ -17,25 +28,17 @@ FilmRoll.order(:folder).all do |roll|
     .order(:filename, :version)
     .each do |img|
     meta = {}
-    geo = img
-          .to_hash.slice(*GEO).values.select { |v| v }
-          .map(&:to_s)
+    geo = img.to_hash.slice(*GEO).values.compact.map(&:to_s)
     meta[:geo] = geo unless geo.empty?
     meta[:k] = MetaData
-               .select(:key, :value)
                .where(id: img.id)
-               .map { |r| [r.key, r.value] }.to_h
+               .select_map(%i[key value])
+               .to_h
     meta[:t] = img.write_timestamp
     f = img.filename
     data[d][f] = {} unless data[d][f]
     data[d][f][ img.version ] = meta
-    tids = TaggedImage
-           .where(imgid: img.id)
-           .select_map(:tagid)
-    tags = UsedTag
-           .where(id: tids)
-           .select_map(:name)
-           .reject { |t| t.match?(/^darktable\|.+/) }
+    tags = get_tags(img.id)
     data[d][f][img.version][:tags] = tags unless tags.empty?
   end
 end
