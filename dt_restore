@@ -2,8 +2,9 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require 'json'
+require 'oj'
 require 'active_support/core_ext/string'
+require 'active_support/core_ext/hash'
 require_relative 'models'
 
 # All in one restore class
@@ -35,17 +36,14 @@ class Restore
   end
 
   def parse_in
-    JSON.parse(ARGF.read).each_pair do |roll_name, images|
-      res = FilmRoll.where(folder: roll_name)
-      if res.empty?
+    Oj.load(ARGF.read).each_pair do |roll_name, images|
+      unless (roll = FilmRoll.find(folder: roll_name))
         warn "no roll: #{roll_name}"
         next
       end
-      roll_id = res.first.id
       images.each_pair do |jfile|
-        file = jfile[0]
         jfile[1].each do |ver, meta|
-          process_image ImageSt.new(file, ver, meta, roll_id, roll_name)
+          process_image ImageSt.new(jfile[0], ver, meta, roll.id, roll_name)
         end
       end
     end
@@ -53,13 +51,13 @@ class Restore
 
   def process_image(img)
     puts "j: #{img.file} m:#{img.meta}" if @o.vv
-    res = Image
-          .select(:id, :write_timestamp, *GEO)
-          .where(film_id: img.roll_id, filename: img.file, version: img.ver)
-    if res.empty?
+    images = Image
+             .select(:id, :write_timestamp, *GEO)
+             .where(film_id: img.roll_id, filename: img.file, version: img.ver)
+    if images.empty?
       warn "no image in db: #{img.roll_name}/#{img.file} v:#{img.ver}"
     else
-      res.each do |i|
+      images.each do |i|
         ih = i.to_hash.select { |_, v| v }
         if ih[:write_timestamp] >= img.meta['t']
           puts "#{img.file}:#{img.ver} is newer" if @o.vv
@@ -77,7 +75,7 @@ class Restore
 
   def process_meta(ihsh, img)
     db_k = {}
-    res = MetaData.where(id: ihsh[:id]).each do |row|
+    MetaData.where(id: ihsh[:id]).each do |row|
       db_k[[row.id, row.key]] = row.value
     end
     img.meta['k'].each_pair do |k, v|
@@ -155,24 +153,24 @@ class Restore
 
   def tag_add(imgid, tags)
     tags.each do |t|
-      res = UsedTag.where(name: t)
-      if res.empty?
+      u_tag = UsedTag.find(name: t)
+      puts "u_tag: #{u_tag}"
+      if u_tag
+        puts "ch add t:#{t} id:#{u_tag.id}"
+        puts TaggedImage.insert(imgid: imgid, tagid: u_tag.id)
+      else
         newid = UsedTag.max(:id) + 1
         puts "ch new t:#{t} id:#{newid}"
         puts UsedTag.insert(id: newid, name: t)
         puts TaggedImage.insert(imgid: imgid, tagid: newid)
         puts Tag.insert(id: newid, name: t)
-      else
-        id = res.first.id
-        puts "ch add t:#{t} id:#{id}"
-        puts TaggedImage.insert(imgid: imgid, tagid: id)
       end
     end
   end
 
   def tag_del(imgid, tags)
     tags.each do |t|
-      id = UsedTag.where(name: t).first.id
+      id = UsedTag.find(name: t).id
       puts "ch del t:#{t} id:#{id}"
       puts TaggedImage.where(imgid: imgid, tagid: id).delete
       next unless TaggedImage.where(tagid: id).count.zero?
@@ -190,12 +188,12 @@ class Restore
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
-    if ihsh.slice(*GEO) == nr.slice(*GEO)
-      puts 'same geo' if @o.vv
-    else
-      res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
-      puts "ch geo: #{nr} res: #{res}" if @o.v || @o.vv
-    end
+    og = ihsh.slice(*GEO)
+    ng = nr.slice(*GEO).transform_values(&:to_f)
+    return if ng == og
+
+    res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
+    puts "ch geo:#{ng} <- #{og} res: #{res}" if @o.v || @o.vv
   end
 end
 
