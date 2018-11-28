@@ -4,41 +4,43 @@
 require 'oj'
 require_relative 'models'
 
-GEO = %i[longitude latitude altitude].freeze
-
 data = {}
 
 def get_tags(imgid)
   tids = TaggedImage
          .where(imgid: imgid)
          .select_map(:tagid)
-
   UsedTag
     .where(id: tids)
     .select_map(:name)
     .reject { |t| t.match?(/^darktable\|.+/) }
 end
 
+def get_meta_k(imgid)
+  MetaData
+    .where(id: imgid)
+    .select_map(%i[key value])
+    .to_h
+end
+
 FilmRoll.order(:folder).all do |roll|
   d = roll.folder
   data[d] = {}
   Image
-    .select(:id, :filename, :version, :write_timestamp, *GEO)
+    .select(:id, :filename, :version, :write_timestamp, *Image::GEO)
     .where(film_id: roll.id)
     .order(:filename, :version)
     .each do |img|
-    meta = {}
-    geo = img.to_hash.slice(*GEO).values.compact.map(&:to_s)
+    meta = {
+      t: img.write_timestamp,
+      k: get_meta_k(img.id)
+    }
+    geo = img.to_hash.slice(*Image::GEO).values.compact.map(&:to_s)
     meta[:geo] = geo unless geo.empty?
-    meta[:k] = MetaData
-               .where(id: img.id)
-               .select_map(%i[key value])
-               .to_h
-    meta[:t] = img.write_timestamp
     f = img.filename
-    data[d][f] = {} unless data[d][f]
-    data[d][f][ img.version ] = meta
     tags = get_tags(img.id)
+    data[d][f] ||= {}
+    data[d][f][img.version] = meta
     data[d][f][img.version][:tags] = tags unless tags.empty?
   end
 end

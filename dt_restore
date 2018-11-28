@@ -9,8 +9,6 @@ require_relative 'models'
 
 # All in one restore class
 class Restore
-  GEO = %i[longitude latitude altitude].freeze
-
   ImageSt = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
 
   Op = Struct.new :dry, :v, :vv, :force, :add_tag, :del_tag, :no_geo,
@@ -54,7 +52,7 @@ class Restore
   def process_image(img)
     puts "j: #{img.file} m:#{img.meta}" if @o.vv
     images = Image
-             .select(:id, :write_timestamp, *GEO)
+             .select(:id, :write_timestamp, *Image::GEO)
              .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if images.empty?
       warn "no image in db: #{img.roll_name}/#{img.file} v:#{img.ver}"
@@ -124,7 +122,7 @@ class Restore
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
     return if tags == db_tags
 
-    photo = "#{img.roll_name}/#{img.file} #{imgid}"
+    # photo = "#{img.roll_name}/#{img.file} #{imgid}"
     if @o.add_tag
       diff = []
       db_tags_flat = db_tags.map { |dt| dt.split '|' }.flatten.uniq
@@ -134,7 +132,7 @@ class Restore
         diff << nt unless db_tags_flat.include?(nt)
       end
       unless diff.empty?
-        puts "ch #{photo} add:#{diff}"
+        puts "ch tag add:#{diff}"
         tag_add(imgid, diff) unless @o.dry
       end
     end
@@ -146,7 +144,7 @@ class Restore
         diff << nt
       end
       unless diff.empty?
-        puts "ch #{photo} del:#{diff}"
+        puts "ch tag del:#{diff}"
         tag_del(imgid, diff) unless @o.dry
       end
     end
@@ -190,8 +188,8 @@ class Restore
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
-    og = ihsh.slice(*GEO)
-    ng = nr.slice(*GEO).transform_values(&:to_f)
+    og = ihsh.slice(*Image::GEO)
+    ng = nr.slice(*Image::GEO).transform_values(&:to_f)
     return if ng == og
 
     res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)

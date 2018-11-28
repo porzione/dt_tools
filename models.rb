@@ -10,7 +10,9 @@ DB_DATA = Sequel.connect "sqlite://#{DB_BASE_PATH}/data.db"
 CACHE = nil
 Sequel::Model.plugin :caching, CACHE
 
-class Image < Sequel::Model; end
+class Image < Sequel::Model
+  GEO = %i[longitude latitude altitude].freeze
+end
 
 class FilmRoll < Sequel::Model; end
 
