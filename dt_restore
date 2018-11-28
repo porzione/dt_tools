@@ -13,7 +13,8 @@ class Restore
 
   ImageSt = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
 
-  Op = Struct.new :dry, :v, :vv, :force, :add, :del, :no_geo, :no_meta
+  Op = Struct.new :dry, :v, :vv, :force, :add_tag, :del_tag, :no_geo,
+                  :no_meta, :del_meta
 
   def initialize
     @ignore_tags = []
@@ -23,15 +24,16 @@ class Restore
   def optparse
     @o = Op.new
     OptionParser.new do |opts|
-      opts.on('-n',   'dry run') { @o.dry   = true }
-      opts.on('-v',   'verbose') { @o.v     = true }
-      opts.on('--vv', 'very -v') { @o.vv    = true }
-      opts.on('-f',   'force')   { @o.force = true }
-      opts.on('-a', 'add tags')  { @o.add = true }
-      opts.on('-d', 'del tags')  { @o.del = true }
-      opts.on('--ng', 'no geo')  { @o.no_geo = true }
-      opts.on('--nm', 'no meta') { @o.no_meta = true }
-      opts.on('-i T', 'Ignore')  { |t| @ignore_tags << t }
+      opts.on('-n',   'dry run')  { @o.dry      = true }
+      opts.on('-v',   'verbose')  { @o.v        = true }
+      opts.on('--vv', 'very -v')  { @o.vv       = true }
+      opts.on('-f',   'force')    { @o.force    = true }
+      opts.on('--at', 'add tags') { @o.add_tag  = true }
+      opts.on('--dt', 'del tags') { @o.del_tag  = true }
+      opts.on('--ng', 'no geo')   { @o.no_geo   = true }
+      opts.on('--nm', 'no meta')  { @o.no_meta  = true }
+      opts.on('--dm', 'del meta') { @o.del_meta = true }
+      opts.on('-i T', 'Ignore')   { |t| @ignore_tags << t }
     end.parse!
   end
 
@@ -97,16 +99,16 @@ class Restore
                 .insert(id: ihsh[:id], key: k, value: v)
         end
       end
-      puts "ch k:#{k} #{v} res:#{res}" # if @o.v
+      puts "ch m:#{k} #{v} => #{res}" # if @o.v
     end
+
+    return unless @o.del_meta
+
     db_k.keys.each do |del|
       d_id, d_k = del
-      next if d_k == 2 # title
-
-      puts "ch del k: #{d_id} #{d_k} #{db_k[del]}" # if @o.v
-      next if @o.dry
-
-      puts MetaData.where(id: d_id, key: d_k).delete
+      # next if d_k == MetaData::TITLE
+      res = @o.dry ? 'DRY' : MetaData.where(id: d_id, key: d_k).delete
+      puts "ch del m: '#{db_k[del]}' #{d_id} #{d_k} => #{res}" # if @o.v
     end
   end
 
@@ -123,7 +125,7 @@ class Restore
     return if tags == db_tags
 
     photo = "#{img.roll_name}/#{img.file} #{imgid}"
-    if @o.add
+    if @o.add_tag
       diff = []
       db_tags_flat = db_tags.map { |dt| dt.split '|' }.flatten.uniq
       (tags - db_tags).each do |nt|
@@ -136,7 +138,7 @@ class Restore
         tag_add(imgid, diff) unless @o.dry
       end
     end
-    if @o.del
+    if @o.del_tag
       diff = []
       (db_tags - tags).each do |nt|
         next if @ignore_tags.include?(nt)
@@ -193,7 +195,7 @@ class Restore
     return if ng == og
 
     res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
-    puts "ch geo:#{ng} <- #{og} res: #{res}" if @o.v || @o.vv
+    puts "ch geo:#{ng} was:#{og} => #{res}" if @o.v || @o.vv
   end
 end
 
