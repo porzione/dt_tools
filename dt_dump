@@ -17,7 +17,9 @@ FilmRoll.order(:folder).all do |roll|
     .order(:filename, :version)
     .each do |img|
     meta = {}
-    geo = img.to_hash.slice(*GEO).values.select { |v| v }
+    geo = img
+          .to_hash.slice(*GEO).values.select { |v| v }
+          .map(&:to_s)
     meta[:geo] = geo unless geo.empty?
     meta[:k] = MetaData
                .select(:key, :value)
