@@ -3,19 +3,25 @@ usually it located in ~/.config/darktable/*.db
 
 Delete, rename, create tags
 
-`dtag`
+`dtag` list used tags 
+
+`dtag -d 'wood'` delete tag zoo
 
 Cleanup database
 
 `dtdb`
 
-Dump database to stdout in JSON format
+Dump metada to stdout in JSON format
 
 `dt_dump`
 
-Restore database from stdin
+Restore meta from stdin
 
 `dt_restore`
+
+Restore dump, enable tag add and delete, ignote tag 'winter', dry mode
+
+`cat dump.json | ./dt_restore --at --dt -i winter -n`
 
 Find non imported files in roll directories
 
