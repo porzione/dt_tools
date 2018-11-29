@@ -3,10 +3,9 @@
 
 require 'pp'
 require 'optparse'
-require 'ostruct'
 require_relative 'models'
 
-o = OpenStruct.new
+o = Struct.new(:v, :vv, :c, :f, :r, :s, :dh).new
 OptionParser.new do |opts|
   opts.on('-v',   'verbose')  { o.v  = true }
   opts.on('--vv', 'very -v')  { o.vv = true }

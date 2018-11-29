@@ -4,8 +4,6 @@
 require 'oj'
 require_relative 'models'
 
-data = {}
-
 def get_tags(imgid)
   tids = TaggedImage
          .where(imgid: imgid)
@@ -23,6 +21,8 @@ def get_meta_k(imgid)
     .to_h
 end
 
+data = {}
+
 FilmRoll.order(:folder).all do |roll|
   d = roll.folder
   data[d] = {}
@@ -37,8 +37,8 @@ FilmRoll.order(:folder).all do |roll|
     }
     geo = img.to_hash.slice(*Image::GEO).values.compact.map(&:to_s)
     meta[:geo] = geo unless geo.empty?
-    f = img.filename
     tags = get_tags(img.id)
+    f = img.filename
     data[d][f] ||= {}
     data[d][f][img.version] = meta
     data[d][f][img.version][:tags] = tags unless tags.empty?

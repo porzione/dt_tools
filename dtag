@@ -2,14 +2,13 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require 'ostruct'
 require_relative 'models'
 
-o = OpenStruct.new
+o = Struct.new(:delete_tag, :rename_tag, :new_tag).new
 OptionParser.new do |opts|
   opts.on('-d TAG', 'Delete tag') { |t| o.delete_tag = t }
   opts.on('-r TAG', 'Rename tag') { |t| o.rename_tag = t }
-  opts.on('-n TAG', 'New tag')    { |t| o.new_tag = t }
+  opts.on('-n TAG', 'New name')   { |t| o.new_tag = t }
 end.parse!
 
 if o.delete_tag

@@ -9,7 +9,7 @@ require_relative 'models'
 
 # All in one restore class
 class Restore
-  ImageSt = Struct.new(:file, :ver, :meta, :roll_id, :roll_name)
+  ImageSt = Struct.new :file, :ver, :meta, :roll_id, :roll_name
 
   Op = Struct.new :dry, :v, :vv, :force, :add_tag, :del_tag, :no_geo,
                   :no_meta, :del_meta
