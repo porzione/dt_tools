@@ -12,3 +12,8 @@ Metrics/CyclomaticComplexity:
 
 Metrics/PerceivedComplexity:
   Enabled: false
+
+Layout/AlignHash:
+  Exclude:
+    - 'models.rb'
+  EnforcedColonStyle: table

@@ -81,32 +81,40 @@ class Restore
     img.meta['k'].each_pair do |k, v|
       db_kk = [ihsh[:id], k.to_i]
       if db_k[db_kk] == v
-        puts "same k: #{db_kk} => #{db_k[db_kk].truncate(40)}" if @o.vv
+        puts "same k:#{db_kk} res:#{db_k[db_kk].truncate(40)}" if @o.vv
         db_k.delete db_kk
         next
       end
       db_k.delete db_kk
       if @o.dry
         res = 'DRY'
+        act = 'dry'
       else
+        act = 'upd'
         res = MetaData
               .where(id: ihsh[:id], key: k)
               .update(value: v)
         if res.zero?
+          act = 'new'
           res = MetaData
                 .insert(id: ihsh[:id], key: k, value: v)
         end
       end
-      puts "ch m:#{k} #{v} => #{res}" # if @o.v
+      if @o.v
+        kn = MetaData::NAMES[k.to_i]
+        puts %(ch #{act} m:#{kn}="#{v}" res:#{res})
+      end
     end
 
     return unless @o.del_meta
 
     db_k.keys.each do |del|
       d_id, d_k = del
-      # next if d_k == MetaData::TITLE
       res = @o.dry ? 'DRY' : MetaData.where(id: d_id, key: d_k).delete
-      puts "ch del m: '#{db_k[del]}' #{d_id} #{d_k} => #{res}" # if @o.v
+      if @o.v
+        kn = MetaData::NAMES[d_k.to_i]
+        puts %(ch del m:#{kn}="#{db_k[del]}" #{d_id} #{d_k} res:#{res})
+      end
     end
   end
 
@@ -154,7 +162,6 @@ class Restore
   def tag_add(imgid, tags)
     tags.each do |t|
       u_tag = UsedTag.find(name: t)
-      puts "u_tag: #{u_tag}"
       if u_tag
         puts "ch add t:#{t} id:#{u_tag.id}"
         puts TaggedImage.insert(imgid: imgid, tagid: u_tag.id)
@@ -193,7 +200,7 @@ class Restore
     return if ng == og
 
     res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
-    puts "ch geo:#{ng} was:#{og} => #{res}" if @o.v || @o.vv
+    puts "ch geo:#{ng} was:#{og} res:#{res}" if @o.v || @o.vv
   end
 end
 

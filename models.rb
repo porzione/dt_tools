@@ -26,6 +26,14 @@ class MetaData < Sequel::Model(:meta_data)
   TITLE     = 2
   DESCR     = 3
   RIGHTS    = 4
+
+  NAMES = {
+    CREATOR   => 'creator',
+    PUBLISHER => 'publisher',
+    TITLE     => 'title',
+    DESCR     => 'description',
+    RIGHTS    => 'rights'
+  }.freeze
 end
 
 class Tag < Sequel::Model(DB_DATA); end
