@@ -4,19 +4,21 @@
 require 'optparse'
 require_relative 'models'
 
-o = Struct.new(:delete_tag, :rename_tag, :new_tag).new
+def tag_id(name)
+  tag = Tag.find(name: name) || abort("no tag '#{name}'")
+  tag.id
+end
+
+o = Struct.new(:delete_tag, :rename_tag, :new_tag, :st_tag).new
 OptionParser.new do |opts|
   opts.on('-d TAG', 'Delete tag') { |t| o.delete_tag = t }
   opts.on('-r TAG', 'Rename tag') { |t| o.rename_tag = t }
   opts.on('-n TAG', 'New name')   { |t| o.new_tag = t }
+  opts.on('-s TAG', 'Stats')      { |t| o.st_tag = t }
 end.parse!
 
 if o.delete_tag
-  if (tag = Tag.find(name: o.delete_tag))
-    id = tag.id
-  else
-    abort "no tag '#{o.delete_tag}'"
-  end
+  id = tag_id(o.delete_tag)
   puts "id: #{id}"
   printf "tags: %d\n", Tag.where(id: id).delete
   printf "used_tags: %d\n", UsedTag.where(id: id).delete
@@ -35,6 +37,10 @@ elsif o.rename_tag && o.new_tag
     res = UsedTag.where(id: row.id).update(name: new_name)
     puts "#{row.name} -> #{new_name}: #{res}"
   end
+elsif o.st_tag
+  id = tag_id(o.st_tag)
+  puts "id: #{id}"
+  printf "tagged_images: %d\n", TaggedImage.where(tagid: id).count
 else
   Tag.order(:name).each { |r| puts r.name }
 end
