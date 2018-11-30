@@ -11,7 +11,8 @@ require_relative 'models'
 class Restore
   ImageSt = Struct.new :file, :ver, :meta, :roll_id, :roll_name
 
-  Op = Struct.new :dry, :v, :vv, :force, :add_tag, :del_tag, :no_geo,
+  Op = Struct.new :dry, :v, :vv, :force, :add_tag, :del_tag,
+                  :no_geo, :r_geo,
                   :no_meta, :del_meta
 
   def initialize
@@ -22,16 +23,17 @@ class Restore
   def optparse
     @o = Op.new
     OptionParser.new do |opts|
-      opts.on('-n',   'dry run')  { @o.dry      = true }
-      opts.on('-v',   'verbose')  { @o.v        = true }
-      opts.on('--vv', 'very -v')  { @o.vv       = true }
-      opts.on('-f',   'force')    { @o.force    = true }
-      opts.on('--at', 'add tags') { @o.add_tag  = true }
-      opts.on('--dt', 'del tags') { @o.del_tag  = true }
-      opts.on('--ng', 'no geo')   { @o.no_geo   = true }
-      opts.on('--nm', 'no meta')  { @o.no_meta  = true }
-      opts.on('--dm', 'del meta') { @o.del_meta = true }
-      opts.on('-i T', 'Ignore')   { |t| @ignore_tags << t }
+      opts.on('-n',     'dry run')  { @o.dry       = true }
+      opts.on('-v',     'verbose')  { @o.v         = true }
+      opts.on('--vv',   'very -v')  { @o.vv        = true }
+      opts.on('-f',     'force')    { @o.force     = true }
+      opts.on('--at',   'add tags') { @o.add_tag   = true }
+      opts.on('--dt',   'del tags') { @o.del_tag   = true }
+      opts.on('--rg N', 'round ll') { |n| @o.r_geo = Integer(n) }
+      opts.on('--ng',   'no geo')   { @o.no_geo    = true }
+      opts.on('--nm',   'no meta')  { @o.no_meta   = true }
+      opts.on('--dm',   'del meta') { @o.del_meta  = true }
+      opts.on('-i T',   'Ignore')   { |t| @ignore_tags << t }
     end.parse!
     @o.v = true if @o.vv
   end
@@ -50,9 +52,8 @@ class Restore
     end
   end
 
-  # TODO: finisg logging
   def process_image(img)
-    puts "js: #{img.file} m:#{img.meta}" if @o.vv
+    puts "js: #{img.file}:#{img.ver} #{img.meta}" if @o.v
     images = Image
              .select(:id, :write_timestamp, *Image::GEO)
              .where(film_id: img.roll_id, filename: img.file, version: img.ver)
@@ -63,10 +64,10 @@ class Restore
         ih = i.to_hash.select { |_, v| v }
         # img: json, ih: database
         if ih[:write_timestamp] >= img.meta['t']
-          puts "js: #{img.file}:#{img.ver} is newer" if @o.vv
+          puts 'local is newer' if @o.vv
           next unless @o.force
         elsif @o.v
-          puts "js: #{img.file}:#{img.ver} is older"
+          puts 'local is older'
         end
         puts "db: #{ih}" if @o.vv
         process_geo(ih, img.meta['geo']) if img.meta.key?('geo') && !@o.no_geo
@@ -84,7 +85,7 @@ class Restore
     img.meta['k'].each_pair do |k, v|
       db_kk = [ihsh[:id], k.to_i]
       if db_k[db_kk] == v
-        puts %(same m:#{MetaData::NAMES[k.to_i]}="#{v.truncate(40)}") if @o.vv
+        puts %(same #{MetaData::NAMES[k.to_i]} "#{v.truncate(40)}") if @o.vv
         db_k.delete db_kk
         next
       end
@@ -133,7 +134,6 @@ class Restore
     puts "t:#{tags} dt:#{db_tags}" if @o.vv
     return if tags == db_tags
 
-    # photo = "#{img.roll_name}/#{img.file} #{imgid}"
     if @o.add_tag
       diff = []
       db_tags_flat = db_tags.map { |dt| dt.split '|' }.flatten.uniq
@@ -159,6 +159,7 @@ class Restore
         tag_del(imgid, diff) unless @o.dry
       end
     end
+    puts '/tags' if @o.vv
   end
 
   def tag_add(imgid, tags)
@@ -194,16 +195,20 @@ class Restore
   def process_geo(ihsh, geo)
     raise 'no geo data' unless geo
 
+    geo.map!(&:to_f)
+    geo.map! { |v| v.round(@o.r_geo) } if @o.r_geo
     nr = { write_timestamp: Time.now.to_i }
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
     og = ihsh.slice(*Image::GEO)
-    ng = nr.slice(*Image::GEO).transform_values(&:to_f)
+    ng = nr.slice(*Image::GEO)
+    og.transform_values! { |v| v.round(@o.r_geo) } if @o.r_geo
+    puts "geo old:#{og.values} new:#{ng.values}" if @o.vv
     return if ng == og
 
     res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
-    puts "ch geo:#{ng} was:#{og} res:#{res}"
+    puts "ch geo old:#{og} new:#{ng} res:#{res}"
   end
 end
 
