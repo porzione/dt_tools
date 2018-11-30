@@ -5,13 +5,10 @@ require 'oj'
 require_relative 'models'
 
 def get_tags(imgid)
-  tids = TaggedImage
+  UsedTag.join(:tagged_images, tagid: :id)
          .where(imgid: imgid)
-         .select_map(:tagid)
-  UsedTag
-    .where(id: tids)
-    .select_map(:name)
-    .reject { |t| t.match?(/^darktable\|.+/) }
+         .select_map(:name)
+         .reject { |t| t.match?(/^darktable\|.+/) }
 end
 
 def get_meta_k(imgid)

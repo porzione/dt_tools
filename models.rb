@@ -10,15 +10,19 @@ DB_DATA = Sequel.connect "sqlite://#{DB_BASE_PATH}/data.db"
 CACHE = nil
 Sequel::Model.plugin :caching, CACHE
 
+## main lib
 class Image < Sequel::Model
   GEO = %i[longitude latitude altitude].freeze
 end
 
+# id folder
 class FilmRoll < Sequel::Model; end
 
-class TaggedImage < Sequel::Model; end
-
+# id name
 class UsedTag < Sequel::Model; end
+
+# imgid tagid
+class TaggedImage < Sequel::Model; end
 
 class MetaData < Sequel::Model(:meta_data)
   CREATOR   = 0
