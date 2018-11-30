@@ -33,6 +33,7 @@ class Restore
       opts.on('--dm', 'del meta') { @o.del_meta = true }
       opts.on('-i T', 'Ignore')   { |t| @ignore_tags << t }
     end.parse!
+    @o.v = true if @o.vv
   end
 
   def parse_in
@@ -49,8 +50,9 @@ class Restore
     end
   end
 
+  # TODO: finisg logging
   def process_image(img)
-    puts "j: #{img.file} m:#{img.meta}" if @o.vv
+    puts "js: #{img.file} m:#{img.meta}" if @o.vv
     images = Image
              .select(:id, :write_timestamp, *Image::GEO)
              .where(film_id: img.roll_id, filename: img.file, version: img.ver)
@@ -59,16 +61,17 @@ class Restore
     else
       images.each do |i|
         ih = i.to_hash.select { |_, v| v }
+        # img: json, ih: database
         if ih[:write_timestamp] >= img.meta['t']
-          puts "#{img.file}:#{img.ver} is newer" if @o.vv
+          puts "js: #{img.file}:#{img.ver} is newer" if @o.vv
           next unless @o.force
         elsif @o.v
-          puts "#{img.file}:#{img.ver} is older"
+          puts "js: #{img.file}:#{img.ver} is older"
         end
         puts "db: #{ih}" if @o.vv
         process_geo(ih, img.meta['geo']) if img.meta.key?('geo') && !@o.no_geo
         process_meta(ih, img) unless @o.no_meta
-        process_tags(ih, img)
+        process_tags(ih, img) if @o.add_tag || @o.del_tag
       end
     end
   end
@@ -81,7 +84,7 @@ class Restore
     img.meta['k'].each_pair do |k, v|
       db_kk = [ihsh[:id], k.to_i]
       if db_k[db_kk] == v
-        puts "same k:#{db_kk} res:#{db_k[db_kk].truncate(40)}" if @o.vv
+        puts %(same m:#{MetaData::NAMES[k.to_i]}="#{v.truncate(40)}") if @o.vv
         db_k.delete db_kk
         next
       end
@@ -156,7 +159,6 @@ class Restore
         tag_del(imgid, diff) unless @o.dry
       end
     end
-    puts 'tags over' if @o.vv
   end
 
   def tag_add(imgid, tags)
@@ -167,10 +169,11 @@ class Restore
         puts TaggedImage.insert(imgid: imgid, tagid: u_tag.id)
       else
         newid = UsedTag.max(:id) + 1
+        res_ut = UsedTag.insert(id: newid, name: t)
+        res_ti = TaggedImage.insert(imgid: imgid, tagid: newid)
+        res_t = Tag.insert(id: newid, name: t)
         puts "ch new t:#{t} id:#{newid}"
-        puts UsedTag.insert(id: newid, name: t)
-        puts TaggedImage.insert(imgid: imgid, tagid: newid)
-        puts Tag.insert(id: newid, name: t)
+        puts "^^ ut:#{res_ut} ti:#{res_ti} t:#{res_t}" if @o.vv
       end
     end
   end
@@ -178,13 +181,13 @@ class Restore
   def tag_del(imgid, tags)
     tags.each do |t|
       id = UsedTag.find(name: t).id
-      puts "ch del t:#{t} id:#{id}"
-      puts TaggedImage.where(imgid: imgid, tagid: id).delete
+      res = TaggedImage.where(imgid: imgid, tagid: id).delete
+      puts "ch del t:#{t} id:#{id} res:#{res}"
       next unless TaggedImage.where(tagid: id).count.zero?
 
-      r1 = UsedTag.where(id: id).delete
-      r2 = Tag.where(id: id).delete
-      puts "ch no more used ut:#{r1} t:#{r2}"
+      res_ut = UsedTag.where(id: id).delete
+      res_t = Tag.where(id: id).delete
+      puts "ch no more used t:#{res_t} ut:#{res_ut}"
     end
   end
 
@@ -200,7 +203,7 @@ class Restore
     return if ng == og
 
     res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
-    puts "ch geo:#{ng} was:#{og} res:#{res}" if @o.v || @o.vv
+    puts "ch geo:#{ng} was:#{og} res:#{res}"
   end
 end
 
