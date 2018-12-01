@@ -17,3 +17,13 @@ Layout/AlignHash:
   Exclude:
     - 'models.rb'
   EnforcedColonStyle: table
+
+Style/FormatStringToken:
+  Exclude:
+    - 'dtag'
+  Enabled: true
+
+Style/FormatString:
+  Exclude:
+    - 'dtag'
+  Enabled: true

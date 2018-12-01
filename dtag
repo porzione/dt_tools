@@ -9,6 +9,36 @@ def tag_id(name)
   tag.id
 end
 
+def delete(name)
+  id = tag_id(name)
+  puts "id: #{id}"
+  printf "tags: %d\n", Tag.where(id: id).delete
+  printf "used_tags: %d\n", UsedTag.where(id: id).delete
+  printf "tagged_images: %d\n", TaggedImage.where(tagid: id).delete
+end
+
+def rename(oldt, newt)
+  puts Tag.where(name: oldt).update(name: newt)
+  puts UsedTag.where(name: oldt).update(name: newt)
+  Tag.where(Sequel.like(:name, "%#{oldt}%")).each do |row|
+    new_name = row.name.sub oldt, newt
+    res = Tag.where(id: row.id).update(name: new_name)
+    puts "#{row.name} -> #{new_name}: #{res}"
+  end
+  like = Sequel.like(:name, "%#{oldt}%")
+  UsedTag.where(like).each do |row|
+    new_name = row.name.sub oldt, newt
+    res = UsedTag.where(id: row.id).update(name: new_name)
+    puts "#{row.name} -> #{new_name}: #{res}"
+  end
+end
+
+def stats(name)
+  id = tag_id(name)
+  puts "id: #{id}"
+  printf "tagged_images: %d\n", TaggedImage.where(tagid: id).count
+end
+
 o = Struct.new(:delete_tag, :rename_tag, :new_tag, :st_tag).new
 OptionParser.new do |opts|
   opts.on('-d TAG', 'Delete tag') { |t| o.delete_tag = t }
@@ -18,29 +48,15 @@ OptionParser.new do |opts|
 end.parse!
 
 if o.delete_tag
-  id = tag_id(o.delete_tag)
-  puts "id: #{id}"
-  printf "tags: %d\n", Tag.where(id: id).delete
-  printf "used_tags: %d\n", UsedTag.where(id: id).delete
-  printf "tagged_images: %d\n", TaggedImage.where(tagid: id).delete
+  delete(o.delete_tag)
 elsif o.rename_tag && o.new_tag
-  puts Tag.where(name: o.rename_tag).update(name: o.new_tag)
-  puts UsedTag.where(name: o.rename_tag).update(name: o.new_tag)
-  Tag.where(Sequel.like(:name, "%#{o.rename_tag}%")).each do |row|
-    new_name = row.name.sub o.rename_tag, o.new_tag
-    res = Tag.where(id: row.id).update(name: new_name)
-    puts "#{row.name} -> #{new_name}: #{res}"
-  end
-  like = Sequel.like(:name, "%#{o.rename_tag}%")
-  UsedTag.where(like).each do |row|
-    new_name = row.name.sub o.rename_tag, o.new_tag
-    res = UsedTag.where(id: row.id).update(name: new_name)
-    puts "#{row.name} -> #{new_name}: #{res}"
-  end
+  rename(o.rename_tag, o.new_tag)
 elsif o.st_tag
-  id = tag_id(o.st_tag)
-  puts "id: #{id}"
-  printf "tagged_images: %d\n", TaggedImage.where(tagid: id).count
+  stats(o.st_tag)
 else
-  Tag.order(:name).each { |r| puts r.name }
+  # Tag.order(:name).each { |r| puts r.name }
+  UsedTag.join(:tagged_images, tagid: :id)
+         .group_and_count(:name)
+         .order(:name)
+         .each { |r| puts '%-5d %s' % [r[:count], r[:name]] }
 end
