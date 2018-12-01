@@ -5,19 +5,21 @@ Delete, rename, create tags
 
 `dtag` list used tags 
 
-`dtag -d 'wood'` delete tag zoo
+`dtag -d 'wood'` delete tag wood
+
+`dtag -r 'old name' -n 'new name'` rename tag 
 
 Cleanup database
 
-`dtdb`
+`dtdb --help`
 
 Dump metada to stdout in JSON format
 
 `dt_dump`
 
-Restore meta from stdin
+Restore meta from stdin, there is a lot of command line flags
 
-`dt_restore`
+`dt_restore --help`
 
 Restore dump, enable tag add and delete, ignote tag 'winter', dry mode
 
