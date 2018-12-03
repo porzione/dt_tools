@@ -5,28 +5,69 @@ require 'pp'
 require 'optparse'
 require_relative 'models'
 
-o = Struct.new(:v, :vv, :c, :f, :r, :s, :dh).new
-OptionParser.new do |opts|
-  opts.on('-v',   'verbose')  { o.v  = true }
-  opts.on('--vv', 'very -v')  { o.vv = true }
-  opts.on('-c',   'cleanup')  { o.c  = true }
-  opts.on('-f',   'fixdb')    { o.f  = true }
-  opts.on('-r',   'rolls')    { o.r  = true }
-  opts.on('-s',   'stats')    { o.s  = true }
-  opts.on('--dh', 'dup hier') { o.dh = true }
-end.parse!
-o.v = true if o.vv
+# TODO: OO
 
-if o.s
-  puts "rolls:    #{FilmRoll.count}"
-  puts "images:   #{Image.count}"
-  puts "u.images: #{Image.distinct.select(:filename).count}"
-  puts "t.images: #{TaggedImage.count}"
-  puts "u.tags:   #{UsedTag.count}"
-  puts "metadata: #{MetaData.count}"
-  puts "tags:     #{Tag.count}"
-  exit
+class Db
+  def initialize
+    @o = Struct.new(:v, :vv, :c, :f, :r, :s, :mh).new
+    OptionParser.new do |opts|
+      opts.on('-s',   'stats')    { @o.s  = true }
+      opts.on('--mh', 'mul hier') { @o.mh = true }
+      opts.on('-v',   'verbose')  { @o.v  = true }
+      opts.on('--vv', 'very -v')  { @o.vv = true }
+      opts.on('-c',   'cleanup')  { @o.c  = true }
+      opts.on('-f',   'fixdb')    { @o.f  = true }
+      opts.on('-r',   'rolls')    { @o.r  = true }
+    end.parse!
+    @o.v = true if @o.vv
+  end
+
+  def go
+    if @o.s
+      stats
+    elsif @o.mh
+      multi_hier
+    end
+  end
+
+  private
+
+  def stats
+    puts "rolls:    #{FilmRoll.count}"
+    puts "images:   #{Image.count}"
+    puts "u.images: #{Image.distinct.select(:filename).count}"
+    puts "t.images: #{TaggedImage.count}"
+    puts "u.tags:   #{UsedTag.count}"
+    puts "metadata: #{MetaData.count}"
+    puts "tags:     #{Tag.count}"
+  end
+
+  # find images with more than one hierarchical tag
+  def multi_hier
+    sql = 'SELECT id, filename FROM images'
+    @lib.execute(sql).each do |id, filename|
+      tids = tids(id)
+      puts "#{id} #{filename} tids: #{tids}" if @o.vv
+      next if tids.empty?
+
+      q = tids.map { '?' }.join(',')
+      sql = %(SELECT name FROM used_tags WHERE id IN (#{q}))
+      ht = @lib
+           .execute(sql, tids)
+           .map { |t| t[0] }
+           .reject { |t| t.start_with? 'darktable' }
+           .select { |t| t.include? '|' }
+      puts "#{filename} #{ht}" if ht.length > 1
+      puts ht if @o.vv
+    end
+  end
+
+
 end
+
+Db.new.go
+
+exit
 
 ids = []
 dfilms = []
@@ -37,34 +78,34 @@ FilmRoll.order(:folder).all do |roll|
     .order(:filename, :version)
     .each do |img|
     fp = "#{roll.folder}/#{img.filename}"
-    if o.c && !File.exist?(fp)
+    if @o.c && !File.exist?(fp)
       res_i = Image.where(id: img.id).delete
       res_m = MetaData.where(id: img.id).delete
       res_t = TaggedImage.where(imgid: img.id).delete
       puts "cleanup: #{fp} i:#{res_i} m:#{res_m} t:#{res_t}"
     end
-    ids << img.id if o.f
+    ids << img.id if @o.f
   end
-  if o.r
+  if @o.r
     c = Image.where(film_id: roll.id).count
-    puts "#{roll.id} #{roll.folder} #{c}" if o.vv
+    puts "#{roll.id} #{roll.folder} #{c}" if @o.vv
     dfilms << roll.id if c.zero?
   end
 end
 
-if o.r && !dfilms.empty?
+if @o.r && !dfilms.empty?
   res = FilmRoll.where(id: dfilms).delete
   puts "del films: #{dfilms} #{res}"
 end
 
-if o.f
+if @o.f
   res_m = MetaData.exclude(id: ids).delete
   res_t = TaggedImage.exclude(imgid: ids).delete
-  puts "orphans: metadata:#{res_m} tagged images:#{res_t}" if o.v
+  puts "orphans: metadata:#{res_m} tagged images:#{res_t}" if @o.v
   Image.db.run 'VACUUM'
 end
 
-if o.dh
+if @o.dh
   Image.each do |i|
     tids = TaggedImage.where(imgid: i.id).select_map(:tagid)
     next if tids.empty?
