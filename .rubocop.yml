@@ -27,3 +27,6 @@ Style/FormatString:
   Exclude:
     - 'dtag'
   Enabled: true
+
+Style/Documentation:
+  Enabled: false

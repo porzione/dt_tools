@@ -55,7 +55,7 @@ class Restore
   def process_image(img)
     puts "js: #{img.file}:#{img.ver} #{img.meta}" if @o.v
     images = Image
-             .select(:id, :write_timestamp, *Image::GEO)
+             .select(:id, :write_timestamp, *DT::Geo)
              .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if images.empty?
       warn "no image in db: #{img.roll_name}/#{img.file} v:#{img.ver}"
@@ -85,7 +85,7 @@ class Restore
     img.meta['k'].each_pair do |k, v|
       db_kk = [ihsh[:id], k.to_i]
       if db_k[db_kk] == v
-        puts %(same #{MetaData::NAMES[k.to_i]} "#{v.truncate(40)}") if @o.vv
+        puts %(same #{DT::NAMES[k.to_i]} "#{v.truncate(40)}") if @o.vv
         db_k.delete db_kk
         next
       end
@@ -105,7 +105,7 @@ class Restore
         end
       end
       if @o.v
-        kn = MetaData::NAMES[k.to_i]
+        kn = DT::NAMES[k.to_i]
         puts %(ch #{act} m:#{kn}="#{v}" res:#{res})
       end
     end
@@ -116,7 +116,7 @@ class Restore
       d_id, d_k = del
       res = @o.dry ? 'DRY' : MetaData.where(id: d_id, key: d_k).delete
       if @o.v
-        kn = MetaData::NAMES[d_k.to_i]
+        kn = DT::NAMES[d_k.to_i]
         puts %(ch del m:#{kn}="#{db_k[del]}" #{d_id} #{d_k} res:#{res})
       end
     end
@@ -201,8 +201,8 @@ class Restore
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
-    og = ihsh.slice(*Image::GEO)
-    ng = nr.slice(*Image::GEO)
+    og = ihsh.slice(*DT::Geo)
+    ng = nr.slice(*DT::Geo)
     og.transform_values! { |v| v.round(@o.r_geo) } if @o.r_geo
     puts "geo old:#{og.values} new:#{ng.values}" if @o.vv
     return if ng == og
