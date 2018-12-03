@@ -3,8 +3,10 @@
 
 require_relative 'models'
 
-FilmRoll.order(:folder).all do |roll|
-  dir = roll.folder
+# ds = DB[:images].where(film_id: :$i, filename: :$f)
+
+FilmRoll.select(:id, :folder).order(:folder).all do |r|
+  dir = r.folder
   unless Dir.exist?(dir)
     warn "no dir:#{dir}"
     next
@@ -13,8 +15,12 @@ FilmRoll.order(:folder).all do |roll|
     next unless File.file?("#{dir}/#{file}")
     next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
 
-    if Image.where(film_id: roll.id, filename: file).count.zero?
+    if Image.where(film_id: r.id, filename: file).count.zero?
       puts "#{dir}/#{file}"
     end
+
+    # if ds.call(:select, i: r.id, f: file).count.zero?
+    #  puts "#{dir}/#{file}"
+    # end
   end
 end

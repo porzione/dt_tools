@@ -38,7 +38,7 @@ class Restore
     @o.v = true if @o.vv
   end
 
-  def parse_in
+  def go
     Oj.load(ARGF.read).each_pair do |roll_name, images|
       unless (roll = FilmRoll.find(folder: roll_name))
         warn "no roll: #{roll_name}"
@@ -212,5 +212,4 @@ class Restore
   end
 end
 
-restore = Restore.new
-restore.parse_in
+Restore.new.go
