@@ -15,7 +15,6 @@ class Db
       opts.on('--mh', 'multi hier') { @o.mh = true }
       opts.on('-r',   'rolls')      { @o.r  = true }
       opts.on('-c',   'cleanup')    { @o.c  = true }
-
       opts.on('-f',   'fixdb')      { @o.f  = true }
       opts.on('-v',   'verbose')    { @o.v  = true }
       opts.on('--vv', 'very -v')    { @o.vv = true }
@@ -33,6 +32,8 @@ class Db
       clean_rolls
     elsif @o.c
       cleanup
+    elsif @o.f
+      fixdb
     else
       puts @opts
     end
@@ -98,36 +99,60 @@ class Db
     end
   end
 
+  def fixdb_sql
+    sql = <<~SQL
+    SELECT m.id FROM meta_data m
+    LEFT JOIN images i ON i.id=m.id
+    GROUP BY m.id
+    HAVING COUNT(i.id)==0
+    SQL
+    if (ids = @lib.execute(sql).flatten).length.positive?
+      q = ids.map { '?' }.join(',')
+      sql = %(DELETE FROM meta_data WHERE id IN (#{q}))
+      @lib.execute(sql, ids)
+      puts "del meta_data orphans: #{@lib.changes}"
+    end
+    sql = <<~SQL
+    SELECT imgid FROM tagged_images
+    LEFT JOIN images i ON id=imgid
+    GROUP BY imgid
+    HAVING COUNT(id)==0
+    SQL
+    if (ids = @lib.execute(sql).flatten).length.positive?
+      q = ids.map { '?' }.join(',')
+      sql = %(DELETE FROM tagged_images WHERE imgid IN (#{q}))
+      @lib.execute(sql, ids)
+      puts "del tagged_images orphans: #{@lib.changes}"
+    end
+  end
+
   # delete orphans from: # meta_data(id), tagged_images(id)
-  def fixdb; end
+  def fixdb
+    m_id = Sequel.qualify(MetaData.table_name, :id)
+    i_id = Sequel.qualify(Image.table_name, :id)
+    MetaData
+      .select(m_id)
+      .left_join(:images, id: :id)
+      .group(m_id)
+      .having { count(i_id) < 1 }
+      .each do |id|
+        puts id
+      end
+    TaggedImage
+      .select(:imgid)
+      .left_join(:images, id: :imgid)
+      .group(:imgid)
+      .having { count(:id) < 1 }
+      .each do |id|
+        puts id
+      end
+
+    # Image.db.run 'VACUUM'
+    # Tag.db.run 'VACUUM'
+  end
+
+  # TODO: delele orphaned xmp
+  # def clean_xmp; end
 end
 
 Db.new.go
-
-exit
-
-ids = []
-dfilms = []
-FilmRoll.order(:folder).all do |roll|
-  Image
-    .select(:id, :filename, :version)
-    .where(film_id: roll.id)
-    .order(:filename, :version)
-    .each do |img|
-    fp = "#{roll.folder}/#{img.filename}"
-    if @o.c && !File.exist?(fp)
-      res_i = Image.where(id: img.id).delete
-      res_m = MetaData.where(id: img.id).delete
-      res_t = TaggedImage.where(imgid: img.id).delete
-      puts "cleanup: #{fp} i:#{res_i} m:#{res_m} t:#{res_t}"
-    end
-    ids << img.id if @o.f
-  end
-end
-
-if @o.f
-  res_m = MetaData.exclude(id: ids).delete
-  res_t = TaggedImage.exclude(imgid: ids).delete
-  puts "orphans: metadata:#{res_m} tagged images:#{res_t}" if @o.v
-  Image.db.run 'VACUUM'
-end
