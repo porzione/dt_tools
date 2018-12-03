@@ -11,7 +11,7 @@ Delete, rename, create tags
 
 Cleanup database
 
-`dtdb --help`
+`dt_db --help`
 
 Dump metada to stdout in JSON format
 
