@@ -18,6 +18,9 @@ Layout/AlignHash:
     - 'models.rb'
   EnforcedColonStyle: table
 
+Layout/IndentHeredoc:
+  Enabled: false
+
 Style/FormatStringToken:
   Exclude:
     - 'dtag'

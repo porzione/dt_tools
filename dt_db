@@ -11,13 +11,15 @@ class Db
   def initialize
     @o = Struct.new(:v, :vv, :c, :f, :r, :s, :mh).new
     OptionParser.new do |opts|
-      opts.on('-s',   'stats')    { @o.s  = true }
-      opts.on('--mh', 'mul hier') { @o.mh = true }
-      opts.on('-v',   'verbose')  { @o.v  = true }
-      opts.on('--vv', 'very -v')  { @o.vv = true }
-      opts.on('-c',   'cleanup')  { @o.c  = true }
-      opts.on('-f',   'fixdb')    { @o.f  = true }
-      opts.on('-r',   'rolls')    { @o.r  = true }
+      opts.on('-s',   'stats')      { @o.s  = true }
+      opts.on('--mh', 'multi hier') { @o.mh = true }
+      opts.on('-r',   'rolls')      { @o.r  = true }
+
+      opts.on('-c',   'cleanup')    { @o.c  = true }
+      opts.on('-f',   'fixdb')      { @o.f  = true }
+      opts.on('-v',   'verbose')    { @o.v  = true }
+      opts.on('--vv', 'very -v')    { @o.vv = true }
+      @opts = opts
     end.parse!
     @o.v = true if @o.vv
   end
@@ -27,6 +29,10 @@ class Db
       stats
     elsif @o.mh
       multi_hier
+    elsif @o.r
+      clean_rolls
+    else
+      puts @opts
     end
   end
 
@@ -44,25 +50,38 @@ class Db
 
   # find images with more than one hierarchical tag
   def multi_hier
-    sql = 'SELECT id, filename FROM images'
-    @lib.execute(sql).each do |id, filename|
-      tids = tids(id)
-      puts "#{id} #{filename} tids: #{tids}" if @o.vv
+    Image.each do |i|
+      tids = TaggedImage.where(imgid: i.id).select_map(:tagid)
       next if tids.empty?
 
-      q = tids.map { '?' }.join(',')
-      sql = %(SELECT name FROM used_tags WHERE id IN (#{q}))
-      ht = @lib
-           .execute(sql, tids)
-           .map { |t| t[0] }
+      ht = UsedTag
+           .where(id: tids).select_map(:name)
            .reject { |t| t.start_with? 'darktable' }
            .select { |t| t.include? '|' }
-      puts "#{filename} #{ht}" if ht.length > 1
-      puts ht if @o.vv
+      puts "#{i.filename} #{ht}" if ht.length > 1
     end
   end
 
+  # delete film rolls without images
+  def clean_rolls
+    r_id = Sequel.qualify(FilmRoll.table_name, :id)
+    i_id = Sequel.qualify(Image.table_name, :id)
+    FilmRoll
+      .select(r_id, :folder)
+      .left_join(:images, film_id: :id)
+      .group(r_id)
+      .having { count(i_id) < 1 }
+      .each do |r|
+        res =  FilmRoll.where(id: r.id).delete
+        puts "delete roll #{r.to_hash} res: #{res}"
+      end
+  end
 
+  # delete data for non existent files
+  def cleanup; end
+
+  # delete orphans from: # meta_data(id), tagged_images(id)
+  def fixdb; end
 end
 
 Db.new.go
@@ -86,16 +105,6 @@ FilmRoll.order(:folder).all do |roll|
     end
     ids << img.id if @o.f
   end
-  if @o.r
-    c = Image.where(film_id: roll.id).count
-    puts "#{roll.id} #{roll.folder} #{c}" if @o.vv
-    dfilms << roll.id if c.zero?
-  end
-end
-
-if @o.r && !dfilms.empty?
-  res = FilmRoll.where(id: dfilms).delete
-  puts "del films: #{dfilms} #{res}"
 end
 
 if @o.f
@@ -103,17 +112,4 @@ if @o.f
   res_t = TaggedImage.exclude(imgid: ids).delete
   puts "orphans: metadata:#{res_m} tagged images:#{res_t}" if @o.v
   Image.db.run 'VACUUM'
-end
-
-if @o.dh
-  Image.each do |i|
-    tids = TaggedImage.where(imgid: i.id).select_map(:tagid)
-    next if tids.empty?
-
-    ht = UsedTag
-         .where(id: tids).select_map(:name)
-         .reject { |t| t.start_with? 'darktable' }
-         .select { |t| t.include? '|' }
-    puts "#{i.filename} #{ht}" if ht.length > 1
-  end
 end
