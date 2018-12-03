@@ -5,7 +5,7 @@ require 'pp'
 require 'optparse'
 require_relative 'models'
 
-# TODO: OO
+# TODO: v, vv
 
 class Db
   def initialize
@@ -99,56 +99,37 @@ class Db
     end
   end
 
-  def fixdb_sql
-    sql = <<~SQL
-    SELECT m.id FROM meta_data m
-    LEFT JOIN images i ON i.id=m.id
-    GROUP BY m.id
-    HAVING COUNT(i.id)==0
-    SQL
-    if (ids = @lib.execute(sql).flatten).length.positive?
-      q = ids.map { '?' }.join(',')
-      sql = %(DELETE FROM meta_data WHERE id IN (#{q}))
-      @lib.execute(sql, ids)
-      puts "del meta_data orphans: #{@lib.changes}"
-    end
-    sql = <<~SQL
-    SELECT imgid FROM tagged_images
-    LEFT JOIN images i ON id=imgid
-    GROUP BY imgid
-    HAVING COUNT(id)==0
-    SQL
-    if (ids = @lib.execute(sql).flatten).length.positive?
-      q = ids.map { '?' }.join(',')
-      sql = %(DELETE FROM tagged_images WHERE imgid IN (#{q}))
-      @lib.execute(sql, ids)
-      puts "del tagged_images orphans: #{@lib.changes}"
-    end
-  end
-
   # delete orphans from: # meta_data(id), tagged_images(id)
   def fixdb
     m_id = Sequel.qualify(MetaData.table_name, :id)
     i_id = Sequel.qualify(Image.table_name, :id)
-    MetaData
-      .select(m_id)
-      .left_join(:images, id: :id)
-      .group(m_id)
-      .having { count(i_id) < 1 }
-      .each do |id|
-        puts id
-      end
-    TaggedImage
-      .select(:imgid)
-      .left_join(:images, id: :imgid)
-      .group(:imgid)
-      .having { count(:id) < 1 }
-      .each do |id|
-        puts id
-      end
+    ch = 0
+    ids = MetaData
+          .select(m_id)
+          .left_join(:images, id: :id)
+          .group(m_id)
+          .having { count(i_id) < 1 }
+          .all.map(&:id)
+    unless ids.empty?
+      ch += 1
+      r = MetaData.where(id: ids).delete
+      puts "del orphaned meta #{ids} res: #{r}"
+    end
+    ids = TaggedImage
+          .select(:imgid)
+          .left_join(:images, id: :imgid)
+          .group(:imgid)
+          .having { count(:id) < 1 }
+          .all.map(&:imgid)
+    unless ids.empty?
+      ch += 1
+      r = TaggedImage.where(imgid: ids).delete
+      puts "del orphaned tagged #{ids} res: #{r}"
+    end
+    return if ch.zero?
 
-    # Image.db.run 'VACUUM'
-    # Tag.db.run 'VACUUM'
+    Image.db.run 'VACUUM'
+    Tag.db.run 'VACUUM'
   end
 
   # TODO: delele orphaned xmp
