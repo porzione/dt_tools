@@ -3,24 +3,17 @@
 
 require_relative 'models'
 
-# ds = DB[:images].where(film_id: :$i, filename: :$f)
-
 FilmRoll.select(:id, :folder).order(:folder).all do |r|
-  dir = r.folder
-  unless Dir.exist?(dir)
-    warn "no dir:#{dir}"
+  unless Dir.exist?(r.folder)
+    warn "no r.folder:#{r.folder}"
     next
   end
-  Dir.entries(dir).each do |file|
-    next unless File.file?("#{dir}/#{file}")
+  Dir.entries(r.folder).each do |file|
+    next unless File.file?("#{r.folder}/#{file}")
     next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
 
     if Image.where(film_id: r.id, filename: file).count.zero?
-      puts "#{dir}/#{file}"
+      puts "#{r.folder}/#{file}"
     end
-
-    # if ds.call(:select, i: r.id, f: file).count.zero?
-    #  puts "#{dir}/#{file}"
-    # end
   end
 end
