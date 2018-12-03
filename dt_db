@@ -14,8 +14,8 @@ class Db
       opts.on('-s',   'stats')      { @o.s  = true }
       opts.on('--mh', 'multi hier') { @o.mh = true }
       opts.on('-r',   'rolls')      { @o.r  = true }
-
       opts.on('-c',   'cleanup')    { @o.c  = true }
+
       opts.on('-f',   'fixdb')      { @o.f  = true }
       opts.on('-v',   'verbose')    { @o.v  = true }
       opts.on('--vv', 'very -v')    { @o.vv = true }
@@ -31,6 +31,8 @@ class Db
       multi_hier
     elsif @o.r
       clean_rolls
+    elsif @o.c
+      cleanup
     else
       puts @opts
     end
@@ -78,7 +80,23 @@ class Db
   end
 
   # delete data for non existent files
-  def cleanup; end
+  def cleanup
+    FilmRoll.order(:folder).all do |roll|
+      Image
+        .select(:id, :filename, :version)
+        .where(film_id: roll.id)
+        .order(:filename, :version)
+        .each do |img|
+        fp = "#{roll.folder}/#{img.filename}"
+        next if File.exist?(fp)
+
+        res_i = Image.where(id: img.id).delete
+        res_m = MetaData.where(id: img.id).delete
+        res_t = TaggedImage.where(imgid: img.id).delete
+        puts "cleanup: #{fp} i:#{res_i} m:#{res_m} t:#{res_t}"
+      end
+    end
+  end
 
   # delete orphans from: # meta_data(id), tagged_images(id)
   def fixdb; end
