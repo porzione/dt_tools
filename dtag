@@ -18,7 +18,6 @@ class Tagger
   end
 
   def go
-    p @o
     if @o.delete_tag
       delete(@o.delete_tag)
     elsif @o.rename_tag && @o.new_tag
