@@ -36,13 +36,12 @@ class Db
   private
 
   def stats
-    puts "rolls:    #{FilmRoll.count}"
-    puts "images:   #{Image.count}"
-    puts "u.images: #{Image.distinct.select(:filename).count}"
-    puts "t.images: #{TaggedImage.count}"
-    puts "u.tags:   #{UsedTag.count}"
-    puts "metadata: #{MetaData.count}"
-    puts "tags:     #{Tag.count}"
+    puts '%-7d rolls' % FilmRoll.count
+    puts '%-7d images' % Image.count
+    puts '%-7d uniq images' % Image.distinct.select(:filename).count
+    puts '%-7d used tags' % UsedTag.count
+    puts '%-7d tags' % Tag.count
+    puts '%-7d metadata' % MetaData.count
   end
 
   # find images with more than one hierarchical tag
