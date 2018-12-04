@@ -55,7 +55,7 @@ class Restore
   def process_image(img)
     puts "js: #{img.file}:#{img.ver} #{img.meta}" if @o.v
     images = Image
-             .select(:id, :write_timestamp, *DT::Geo)
+             .select(:id, :write_timestamp, *DT::GEO)
              .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if images.empty?
       warn "no image in db: #{img.roll_name}/#{img.file} v:#{img.ver}"
@@ -201,8 +201,8 @@ class Restore
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
-    og = ihsh.slice(*DT::Geo)
-    ng = nr.slice(*DT::Geo)
+    og = ihsh.slice(*DT::GEO)
+    ng = nr.slice(*DT::GEO)
     og.transform_values! { |v| v.round(@o.r_geo) } if @o.r_geo
     puts "geo old:#{og.values} new:#{ng.values}" if @o.vv
     return if ng == og
