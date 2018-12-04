@@ -166,8 +166,8 @@ class Restore
     tags.each do |t|
       u_tag = UsedTag.find(name: t)
       if u_tag
-        puts "ch add t:#{t} id:#{u_tag.id}"
-        puts TaggedImage.insert(imgid: imgid, tagid: u_tag.id)
+        res = TaggedImage.insert(imgid: imgid, tagid: u_tag.id)
+        puts "ch add t:#{t} id:#{u_tag.id} res:#{res}"
       else
         newid = UsedTag.max(:id) + 1
         res_ut = UsedTag.insert(id: newid, name: t)
