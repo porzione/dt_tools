@@ -13,6 +13,11 @@ Metrics/CyclomaticComplexity:
 Metrics/PerceivedComplexity:
   Enabled: false
 
+Metrics/BlockLength:
+  Exclude:
+    - 'dt_files'
+  Enabled: true
+
 Layout/AlignHash:
   Exclude:
     - 'models.rb'

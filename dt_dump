@@ -4,26 +4,35 @@
 require 'oj'
 require_relative 'models'
 
+# raw (sql) is always better
 class Dumper
+  GEO_SQL = DT::GEO.map(&:to_s).join(',')
+
   def go
     data = {}
     FilmRoll.select(:id, :folder).order(:folder).each do |r|
       data[r.folder] = {}
-      Image
-        .select(:id, :filename, :version, :write_timestamp, *DT::GEO)
-        .where(film_id: r.id)
-        .order(:filename, :version)
-        .each do |i|
+      sql = <<~SQL
+      SELECT id, filename, version, write_timestamp, #{GEO_SQL}
+      FROM images WHERE film_id=? ORDER BY filename, version
+      SQL
+      # Image
+      #   .select(:id, :filename, :version, :write_timestamp, *DT::GEO)
+      #   .where(film_id: r.id)
+      #   .order(:filename, :version)
+      #   .each do |i|
+      Image.db.fetch(sql, r.id).each do |i|
         meta = {
-          t: i.write_timestamp,
-          k: get_meta_k(i.id)
+          t: i[:write_timestamp],
+          k: get_meta_k(i[:id])
         }
-        geo = i.to_hash.slice(*DT::GEO).values.compact.map(&:to_s)
+        # geo = i.to_hash.slice(*DT::GEO).values.compact.map(&:to_s)
+        geo = i.slice(*DT::GEO).values.compact.map(&:to_s)
         meta[:geo] = geo unless geo.empty?
-        tags = get_tags(i.id)
+        tags = get_tags(i[:id])
         meta[:tags] = tags unless tags.empty?
-        data[r.folder][i.filename] ||= {}
-        data[r.folder][i.filename][i.version] = meta
+        data[r.folder][i[:filename]] ||= {}
+        data[r.folder][i[:filename]][i[:version]] = meta
       end
     end
     puts Oj.dump(data, indent: 2, mode: :compat)
@@ -32,18 +41,39 @@ class Dumper
   private
 
   def get_tags(imgid)
-    UsedTag
-      .select(:name)
-      .join(:tagged_images, tagid: :id)
-      .where(imgid: imgid)
-      .map(&:name)
-      .reject { |t| t.match?(/^darktable\|.+/) }
-      .sort
+    sql = <<~SQL
+    SELECT name FROM used_tags
+    JOIN tagged_images ON tagid=id
+    WHERE imgid=?
+    SQL
+    Image.db
+         .fetch(sql, imgid)
+         .map { |t| t[:name] }
+         .reject { |t| t.match?(/^darktable\|.+/) }
+         .sort
   end
 
+  # def get_tags(imgid)
+  #  UsedTag
+  #    .select(:name)
+  #    .join(:tagged_images, tagid: :id)
+  #    .where(imgid: imgid)
+  #    .map(&:name)
+  #    .reject { |t| t.match?(/^darktable\|.+/) }
+  #    .sort
+  # end
+
   def get_meta_k(imgid)
-    MetaData.where(id: imgid).as_hash(:key, :value)
+    sql = 'SELECT key, value FROM meta_data WHERE id=?'
+    Image.db
+         .fetch(sql, imgid)
+         .map(&:values)
+         .to_h
   end
+
+  # def get_meta_k(imgid)
+  #  MetaData.where(id: imgid).as_hash(:key, :value)
+  # end
 end
 
 Dumper.new.go
