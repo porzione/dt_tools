@@ -6,7 +6,8 @@ require_relative 'models'
 
 class Tagger
   def initialize
-    @o = Struct.new(:delete_tag, :rename_tag, :new_tag, :st_tag).new
+    @o = Struct.new(:delete_tag, :rename_tag, :rename_sub, :new_tag,
+                    :st_tag).new
     OptionParser.new do |opts|
       opts.on('-d TAG', 'Delete tag')      { |t| @o.delete_tag = t }
       opts.on('-r TAG', 'Rename tag')      { |t| @o.rename_tag = t }
@@ -39,7 +40,7 @@ class Tagger
   end
 
   def tag_id(name)
-    tag = Tag.find(name: name) || abort("no tag '#{name}'")
+    tag = Tag.find(name: name) || return
     tag.id
   end
 
@@ -51,21 +52,26 @@ class Tagger
     printf "tagged_images: %d\n", TaggedImage.where(tagid: id).delete
   end
 
-  # TODO: rename to existing name
   def rename(oldt, newt)
     abort('no such tag') unless (old_id = tag_id(oldt))
     if (new_id = tag_id(newt))
-      warn("new tag '#{newt}' exist (#{new_id})")
-      abort
-      TaggedImage.where(tagid: old_id).update(tagid: new_id)
-      puts Tag.where(name: oldt).update(name: newt)
-      puts UsedTag.where(name: oldt).update(name: newt)
+      puts "tag '#{oldt}' exist (#{new_id})"
+      begin
+        res_i = TaggedImage.where(tagid: old_id).update(tagid: new_id)
+      rescue Sequel::UniqueConstraintViolation
+        res_i = -1
+      end
+      res_t = Tag.where(name: oldt).delete
+      res_ut = UsedTag.where(name: oldt).delete
+      puts "changed images: #{res_i}, tags: #{res_t}, u.tags: #{res_ut}"
     else
-      puts Tag.where(name: oldt).update(name: newt)
-      puts UsedTag.where(name: oldt).update(name: newt)
+      res_t = Tag.where(name: oldt).update(name: newt)
+      res_ut = UsedTag.where(name: oldt).update(name: newt)
+      puts "changed tags: #{res_t}, u.tags: #{res_ut}"
     end
   end
 
+  # TODO: check existing
   def rename_sub(oldt, newt)
     like = Sequel.like(:name, "%#{oldt}%")
     Tag.where(like).each do |row|
