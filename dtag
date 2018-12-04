@@ -9,21 +9,22 @@ class Tagger
     @o = Struct.new(:delete_tag, :rename_tag, :rename_sub, :new_tag,
                     :st_tag).new
     OptionParser.new do |opts|
-      opts.on('-d TAG', 'Delete tag')      { |t| @o.delete_tag = t }
-      opts.on('-r TAG', 'Rename tag')      { |t| @o.rename_tag = t }
-      opts.on('--rs TAG', 'Ren substring') { |t| @o.rename_sub = t }
-      opts.on('-n TAG', 'New name')        { |t| @o.new_tag = t }
-      opts.on('-s TAG', 'Stats')           { |t| @o.st_tag = t }
+      opts.on('-d TAG', 'Delete tag')     { |t| @o.delete_tag = t }
+      opts.on('-r TAG', 'Rename tag')     { |t| @o.rename_tag = t }
+      opts.on('-R TAG', 'Ren substring')  { |t| @o.rename_sub = t }
+      opts.on('-n TAG', 'New name')       { |t| @o.new_tag = t }
+      opts.on('-s TAG', 'Stats')          { |t| @o.st_tag = t }
     end.parse!
   end
 
   def go
+    p @o
     if @o.delete_tag
       delete(@o.delete_tag)
     elsif @o.rename_tag && @o.new_tag
       rename(@o.rename_tag, @o.new_tag)
     elsif @o.rename_sub && @o.new_tag
-      rename(@o.rename_sub, @o.new_tag)
+      rename_sub(@o.rename_sub, @o.new_tag)
     elsif @o.st_tag
       stats(@o.st_tag)
     else
@@ -71,7 +72,7 @@ class Tagger
     end
   end
 
-  # TODO: check existing
+  # this don't check existing
   def rename_sub(oldt, newt)
     like = Sequel.like(:name, "%#{oldt}%")
     Tag.where(like).each do |row|
