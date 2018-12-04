@@ -11,6 +11,7 @@ GEM
       concurrent-ruby (~> 1.0)
     minitest (5.11.3)
     oj (3.7.4)
+    ox (2.10.0)
     sequel (5.15.0)
     sqlite3 (1.3.13)
     thread_safe (0.3.6)
@@ -23,6 +24,7 @@ PLATFORMS
 DEPENDENCIES
   activesupport
   oj
+  ox
   sequel
   sqlite3
 

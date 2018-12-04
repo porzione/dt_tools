@@ -1,26 +1,20 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'pp'
 require 'optparse'
 require_relative 'models'
 
-# TODO: v, vv
-
 class Db
   def initialize
-    @o = Struct.new(:v, :vv, :c, :f, :r, :s, :mh).new
+    @o = Struct.new(:c, :f, :r, :s, :mh).new
     OptionParser.new do |opts|
       opts.on('-s',   'stats')      { @o.s  = true }
       opts.on('--mh', 'multi hier') { @o.mh = true }
       opts.on('-r',   'rolls')      { @o.r  = true }
       opts.on('-c',   'cleanup')    { @o.c  = true }
       opts.on('-f',   'fixdb')      { @o.f  = true }
-      opts.on('-v',   'verbose')    { @o.v  = true }
-      opts.on('--vv', 'very -v')    { @o.vv = true }
       @opts = opts
     end.parse!
-    @o.v = true if @o.vv
   end
 
   def go
@@ -131,9 +125,6 @@ class Db
     Image.db.run 'VACUUM'
     Tag.db.run 'VACUUM'
   end
-
-  # TODO: delele orphaned xmp
-  # def clean_xmp; end
 end
 
 Db.new.go

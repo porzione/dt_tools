@@ -1,19 +1,119 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'optparse'
+require 'ox'
 require_relative 'models'
 
-FilmRoll.select(:id, :folder).order(:folder).all do |r|
-  unless Dir.exist?(r.folder)
-    warn "no r.folder:#{r.folder}"
-    next
-  end
-  Dir.entries(r.folder).each do |file|
-    next unless File.file?("#{r.folder}/#{file}")
-    next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
+class XMP < ::Ox::Sax
+  RDFD = :'rdf:Description'
+  FROM = :'xmpMM:DerivedFrom'
+  attr_accessor :derived_from
 
-    if Image.where(film_id: r.id, filename: file).count.zero?
-      puts "#{r.folder}/#{file}"
+  def start_element(name)
+    @rdfd = true if name == RDFD
+    @from = true if name == FROM
+  end
+
+  def end_element(name)
+    @rdfd = nil if name == RDFD
+    @from = false if name == FROM
+  end
+
+  def attr(name, value)
+    return unless @rdfd
+    return unless name == FROM
+
+    @derived_from = value
+  end
+
+  def text(str)
+    return unless @from
+
+    @derived_from = str
+  end
+end
+
+class Files
+  def initialize
+    @o = Struct.new(:v, :ox, :ni).new
+    OptionParser.new do |opts|
+      opts.on('-v',   'verbose')      { @o.v  = true }
+      opts.on('--ox', 'orphaned xmp') { @o.ox = true }
+      opts.on('--nf', 'new images')   { @o.ni = true }
+      @opts = opts
+    end.parse!
+  end
+
+  def go
+    if @o.ox
+      orph_xmp
+    elsif @o.ni
+      new_images
+    else
+      puts @opts
+    end
+  end
+
+  private
+
+  # find xmp sidecars without images
+  def orph_xmp
+    FilmRoll.select(:id, :folder).order(:folder).all do |r|
+      unless Dir.exist?(r.folder)
+        warn "no r.folder:#{r.folder}"
+        next
+      end
+      puts "DIR: #{r.folder}" if @o.v
+      files = []
+      xmps = []
+      Dir.entries(r.folder).each do |file|
+        fp = "#{r.folder}/#{file}"
+        next unless File.file?(fp)
+
+        if file.match?(/\.xmp$/i)
+          xmps << file
+        else
+          files << file
+        end
+      end
+      xmps.each do |xmp|
+        img = xmp.sub(/\.xmp$/i, '')
+        next if files.include?(img)
+
+        fx = "#{r.folder}/#{xmp}"
+        xp = XMP.new
+        Ox.sax_parse(xp, File.read(fx))
+        unless (df = xp.derived_from)
+          warn "no field #{XMP::FROM} in #{fx}"
+          next
+        end
+
+        puts "#{df} -> #{xmp}" if @o.v
+        next if files.include?(df)
+
+        @o.v ? puts(fx) : print("#{fx}\0")
+      end
+    end
+  end
+
+  # find non imported files in film roll dirs
+  def new_images
+    FilmRoll.select(:id, :folder).order(:folder).all do |r|
+      unless Dir.exist?(r.folder)
+        warn "no r.folder:#{r.folder}"
+        next
+      end
+      puts r.folder if @o.v
+      Dir.entries(r.folder).each do |file|
+        fp = "#{r.folder}/#{file}"
+        next unless File.file?(fp)
+        next if file.match?(/\.(xmp|pto|pp3|xcf|orig|txt)$/i)
+
+        puts fp if Image.where(film_id: r.id, filename: file).count.zero?
+      end
     end
   end
 end
+
+Files.new.go

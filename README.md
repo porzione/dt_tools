@@ -1,5 +1,7 @@
-**WARNING** backup your Darktable database before any actions
+**WARNING** backup your Darktable database before any actions,
 usually it located in ~/.config/darktable/*.db
+
+Also be careful with rm command, it is better also to backup all files 
 
 Delete, rename, create tags
 
@@ -27,7 +29,11 @@ Restore dump, enable tag add and delete, ignote tag 'winter', dry mode
 
 Find non imported files in roll directories
 
-`dt_files`
+`dt_files --nf`
+
+Find orphaned xmp and delete them, use with care (remove echo)
+
+`dt_files --ox | xargs -0 echo rm -v`
 
 Helpers to send and receive export/import files
 
