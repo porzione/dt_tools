@@ -8,10 +8,11 @@ class Tagger
   def initialize
     @o = Struct.new(:delete_tag, :rename_tag, :new_tag, :st_tag).new
     OptionParser.new do |opts|
-      opts.on('-d TAG', 'Delete tag') { |t| @o.delete_tag = t }
-      opts.on('-r TAG', 'Rename tag') { |t| @o.rename_tag = t }
-      opts.on('-n TAG', 'New name')   { |t| @o.new_tag = t }
-      opts.on('-s TAG', 'Stats')      { |t| @o.st_tag = t }
+      opts.on('-d TAG', 'Delete tag')      { |t| @o.delete_tag = t }
+      opts.on('-r TAG', 'Rename tag')      { |t| @o.rename_tag = t }
+      opts.on('--rs TAG', 'Ren substring') { |t| @o.rename_sub = t }
+      opts.on('-n TAG', 'New name')        { |t| @o.new_tag = t }
+      opts.on('-s TAG', 'Stats')           { |t| @o.st_tag = t }
     end.parse!
   end
 
@@ -20,6 +21,8 @@ class Tagger
       delete(@o.delete_tag)
     elsif @o.rename_tag && @o.new_tag
       rename(@o.rename_tag, @o.new_tag)
+    elsif @o.rename_sub && @o.new_tag
+      rename(@o.rename_sub, @o.new_tag)
     elsif @o.st_tag
       stats(@o.st_tag)
     else
@@ -48,16 +51,28 @@ class Tagger
     printf "tagged_images: %d\n", TaggedImage.where(tagid: id).delete
   end
 
-  # TODO: like/substring flag
+  # TODO: rename to existing name
   def rename(oldt, newt)
-    puts Tag.where(name: oldt).update(name: newt)
-    puts UsedTag.where(name: oldt).update(name: newt)
-    Tag.where(Sequel.like(:name, "%#{oldt}%")).each do |row|
+    abort('no such tag') unless (old_id = tag_id(oldt))
+    if (new_id = tag_id(newt))
+      warn("new tag '#{newt}' exist (#{new_id})")
+      abort
+      TaggedImage.where(tagid: old_id).update(tagid: new_id)
+      puts Tag.where(name: oldt).update(name: newt)
+      puts UsedTag.where(name: oldt).update(name: newt)
+    else
+      puts Tag.where(name: oldt).update(name: newt)
+      puts UsedTag.where(name: oldt).update(name: newt)
+    end
+  end
+
+  def rename_sub(oldt, newt)
+    like = Sequel.like(:name, "%#{oldt}%")
+    Tag.where(like).each do |row|
       new_name = row.name.sub oldt, newt
       res = Tag.where(id: row.id).update(name: new_name)
       puts "#{row.name} -> #{new_name}: #{res}"
     end
-    like = Sequel.like(:name, "%#{oldt}%")
     UsedTag.where(like).each do |row|
       new_name = row.name.sub oldt, newt
       res = UsedTag.where(id: row.id).update(name: new_name)
