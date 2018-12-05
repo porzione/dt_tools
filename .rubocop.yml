@@ -34,6 +34,7 @@ Style/FormatStringToken:
 Style/FormatString:
   Exclude:
     - 'dtag'
+    - 'dt_db'
   Enabled: true
 
 Style/Documentation:
