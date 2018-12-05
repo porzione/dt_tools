@@ -8,8 +8,6 @@ require 'active_support/core_ext/hash'
 require_relative 'models'
 
 # All in one restore class
-# TODO: gather changes, write once
-# TODO: update tt/datetime_taken
 class Restore
   ImageSt = Struct.new :file, :ver, :meta, :roll_id, :roll_name
 
@@ -57,7 +55,7 @@ class Restore
   def process_image(img)
     puts "js: #{img.file}:#{img.ver} #{img.meta}" if @o.v
     images = Image
-             .select(:id, :write_timestamp, *DT::GEO)
+             .select(:id, :write_timestamp, :datetime_taken, *DT::GEO)
              .where(film_id: img.roll_id, filename: img.file, version: img.ver)
     if images.empty?
       warn "no image in db: #{img.roll_name}/#{img.file} v:#{img.ver}"
@@ -72,8 +70,16 @@ class Restore
           puts 'local is older'
         end
         puts "db: #{ih}" if @o.vv
-        # process_misc(ih, img)
-        process_geo(ih, img.meta['geo']) if img.meta.key?('geo') && !@o.no_geo
+        nr = {}
+        nr.merge!(process_misc(ih, img))
+        if img.meta.key?('geo') && !@o.no_geo
+          nr.merge!(process_geo(ih, img.meta['geo']))
+        end
+        unless nr.empty?
+          nr[:write_timestamp] = Time.now.to_i
+          res = @o.dry ? 'DRY' : Image.where(id: i.id).update(nr)
+          puts "ch image id:#{i.id} nr:#{nr} res:#{res}"
+        end
         process_meta(ih, img) unless @o.no_meta
         process_tags(ih, img) if @o.add_tag || @o.del_tag
       end
@@ -198,7 +204,7 @@ class Restore
 
     geo.map!(&:to_f)
     geo.map! { |v| v.round(@o.r_geo) } if @o.r_geo
-    nr = { write_timestamp: Time.now.to_i }
+    nr = {}
     nr[:longitude] = geo[0] if geo[0]
     nr[:latitude]  = geo[1] if geo[1]
     nr[:altitude]  = geo[2] if geo[2]
@@ -206,14 +212,19 @@ class Restore
     ng = nr.slice(*DT::GEO)
     og.transform_values! { |v| v.round(@o.r_geo) } if @o.r_geo
     puts "geo old:#{og.values} new:#{ng.values}" if @o.vv
-    return if ng == og
+    return {} if ng == og
 
-    res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
-    puts "ch geo old:#{og} new:#{ng} res:#{res}"
+    puts "ch geo old:#{og} new:#{ng}" if @o.vv
+    nr
   end
 
-  # def process_misc(ihsh, img)
-  # end
+  def process_misc(ihsh, img)
+    res = {}
+    if (tt = img.meta['tt']) && tt != ihsh[:datetime_taken]
+      res[:datetime_taken] = tt
+    end
+    res
+  end
 end
 
 Restore.new.go
