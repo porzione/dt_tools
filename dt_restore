@@ -104,10 +104,8 @@ class Restore
                 .insert(id: ihsh[:id], key: k, value: v)
         end
       end
-      if @o.v
-        kn = DT::NAMES[k.to_i]
-        puts %(ch #{act} m:#{kn}="#{v}" res:#{res})
-      end
+      kn = DT::NAMES[k.to_i]
+      puts %(ch #{act} m:#{kn}="#{v}" res:#{res})
     end
 
     return unless @o.del_meta

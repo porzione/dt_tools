@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'optparse'
+require 'chronic'
 require 'oj'
 require_relative 'models'
 
@@ -19,6 +21,17 @@ class Dumper
   SQL
 
   def initialize
+    @o = Struct.new(:since).new
+    OptionParser.new do |opts|
+      opts.on('-s time', 'Since') { |t| @o.since = t }
+    end.parse!
+    if @o.since
+      t = Chronic.parse(@o.since, context: :past)
+      abort 'bad time since' unless t
+      @o.since = t.to_i
+      warn "since: #{t} #{@o.since}"
+      exit
+    end
     @lib = Image.db
   end
 
