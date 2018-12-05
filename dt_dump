@@ -13,7 +13,7 @@ class Dumper
   SQL_META = 'SELECT key, value FROM meta_data WHERE id=?'
   SQL_IMGS = <<~SQL
   SELECT id, filename, version, write_timestamp, #{GEO_SQL}
-  FROM images WHERE film_id=? ORDER BY filename, version
+  FROM images WHERE film_id=? %sORDER BY filename, version
   SQL
   SQL_TAGS = <<~SQL
   SELECT name FROM used_tags
@@ -21,17 +21,25 @@ class Dumper
   SQL
 
   def initialize
-    @o = Struct.new(:since).new
+    @o = Struct.new(:since_e, :since_t).new
     OptionParser.new do |opts|
-      opts.on('-s time', 'Since') { |t| @o.since = t }
+      opts.on('-s time', 'Since edit')  { |t| @o.since_e = t }
+      opts.on('-S time', 'Since taken') { |t| @o.since_t = t }
     end.parse!
-    if @o.since
-      t = Chronic.parse(@o.since, context: :past)
+    if @o.since_e
+      t = Chronic.parse(@o.since_e, context: :past)
       abort 'bad time since' unless t
-      @o.since = t.to_i
-      warn "since: #{t} #{@o.since}"
-      exit
+      @since = t.to_i
+      warn "since: #{t} #{@since}"
+      where = 'AND write_timestamp>=? '
+    elsif @o.since_t
+      t = Chronic.parse(@o.since_t, context: :past)
+      abort 'bad time since' unless t
+      @since = t.strftime('%Y:%m:%d %T')
+      warn "since: #{t} #{@since}"
+      where = 'AND datetime_taken>=? '
     end
+    @sql_imgs = SQL_IMGS % where
     @lib = Image.db
   end
 
@@ -39,8 +47,11 @@ class Dumper
     data = {}
     FilmRoll.select(:id, :folder).order(:folder).each do |r|
       dir = r.folder
-      data[dir] = {}
-      @lib.fetch(SQL_IMGS, r.id).each do |i|
+      d = {}
+      where = [r.id]
+      where << @since if @since
+      # warn "#{@sql_imgs} #{where}"
+      @lib.fetch(@sql_imgs, *where).each do |i|
         meta = {
           t: i[:write_timestamp],
           k: get_meta_k(i[:id])
@@ -49,9 +60,10 @@ class Dumper
         meta[:geo] = geo unless geo.empty?
         tags = get_tags(i[:id])
         meta[:tags] = tags unless tags.empty?
-        data[dir][i[:filename]] ||= {}
-        data[dir][i[:filename]][i[:version]] = meta
+        d[i[:filename]] ||= {}
+        d[i[:filename]][i[:version]] = meta
       end
+      data[dir] = d unless d.empty?
     end
     puts Oj.dump(data, indent: 2, mode: :compat)
   end
