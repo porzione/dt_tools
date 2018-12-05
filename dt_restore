@@ -8,6 +8,8 @@ require 'active_support/core_ext/hash'
 require_relative 'models'
 
 # All in one restore class
+# TODO: gather changes, write once
+# TODO: update tt/datetime_taken
 class Restore
   ImageSt = Struct.new :file, :ver, :meta, :roll_id, :roll_name
 
@@ -70,6 +72,7 @@ class Restore
           puts 'local is older'
         end
         puts "db: #{ih}" if @o.vv
+        # process_misc(ih, img)
         process_geo(ih, img.meta['geo']) if img.meta.key?('geo') && !@o.no_geo
         process_meta(ih, img) unless @o.no_meta
         process_tags(ih, img) if @o.add_tag || @o.del_tag
@@ -208,6 +211,9 @@ class Restore
     res = @o.dry ? 'DRY' : Image.where(id: ihsh[:id]).update(nr)
     puts "ch geo old:#{og} new:#{ng} res:#{res}"
   end
+
+  # def process_misc(ihsh, img)
+  # end
 end
 
 Restore.new.go
