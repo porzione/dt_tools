@@ -3,6 +3,7 @@
 
 require 'optparse'
 require 'chronic'
+require 'active_support/core_ext/object/blank'
 require 'oj'
 require_relative 'models'
 
@@ -12,7 +13,7 @@ class Dumper
 
   SQL_META = 'SELECT key, value FROM meta_data WHERE id=?'
   SQL_IMGS = <<~SQL
-  SELECT id, filename, version, write_timestamp, #{GEO_SQL}
+  SELECT id, filename, version, write_timestamp, #{GEO_SQL},datetime_taken tt
   FROM images WHERE film_id=? %sORDER BY filename, version
   SQL
   SQL_TAGS = <<~SQL
@@ -21,10 +22,11 @@ class Dumper
   SQL
 
   def initialize
-    @o = Struct.new(:since_e, :since_t).new
+    @o = Struct.new(:since_e, :since_t, :tt).new
     OptionParser.new do |opts|
       opts.on('-s time', 'Since edit')  { |t| @o.since_e = t }
       opts.on('-S time', 'Since taken') { |t| @o.since_t = t }
+      opts.on('-t', 'Dump time taken')  { @o.tt = true }
     end.parse!
     if @o.since_e
       t = Chronic.parse(@o.since_e, context: :past)
@@ -56,6 +58,7 @@ class Dumper
           t: i[:write_timestamp],
           k: get_meta_k(i[:id])
         }
+        meta[:tt] = i[:tt] if @o.tt && !i[:tt].blank?
         geo = i.slice(*DT::GEO).values.compact.map(&:to_s)
         meta[:geo] = geo unless geo.empty?
         tags = get_tags(i[:id])
