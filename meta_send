@@ -2,15 +2,20 @@
 
 source './meta.conf'
 
-usage() { echo "Usage: $0 [-r <remote hostame>] [-d <remote directory>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-r <remote hostame>] [-d <remote directory>] [-t]" 1>&2; exit 1; }
 
-while getopts ":r:d:" o; do
+cmd='./dt_dump'
+
+while getopts ":r:d:t" o; do
   case "${o}" in
     r)
       r=${OPTARG}
       ;;
     d)
       d=${OPTARG}
+      ;;
+    t)
+      cmd="${cmd} -t"
       ;;
     *)
       usage
@@ -32,8 +37,9 @@ f="z_$(hostname).json"
 echo "remote=${r}"
 echo "dir=${d}"
 echo "file=${f}"
+echo "command=${cmd}"
 
-./dt_dump > $f
+$cmd > $f
 
 #scp -C ${f} ${r}:${d}
 rsync -v --compress-level=9 ${f} ${r}:${d}

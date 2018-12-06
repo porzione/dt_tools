@@ -5,15 +5,20 @@ dir=$2
 
 source './meta.conf'
 
-usage() { echo "Usage: $0 [-r <remote hostame>] [-d <remote directory>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-r <remote hostame>] [-d <remote directory>] [-t]" 1>&2; exit 1; }
 
-while getopts ":r:d:" o; do
+cmd='./dt_dump'
+
+while getopts ":r:d:t" o; do
   case "${o}" in
     r)
       r=${OPTARG}
       ;;
     d)
       d=${OPTARG}
+      ;;
+    t)
+      cmd="${cmd} -t"
       ;;
     *)
       usage
@@ -32,5 +37,6 @@ fi
 
 echo "remote=${r}"
 echo "dir=${d}"
+echo "command=${cmd}"
 
-ssh ${r} "eval \"\$(~/.rbenv/bin/rbenv init -)\"; cd ${d} ; bundle exec ./dt_dump | gzip" | gunzip > z_${r}.json
+ssh ${r} "eval \"\$(~/.rbenv/bin/rbenv init -)\"; cd ${d} ; bundle exec ${cmd} | gzip" | gunzip > z_${r}.json
