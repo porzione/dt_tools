@@ -22,11 +22,12 @@ class Dumper
   SQL
 
   def initialize
-    @o = Struct.new(:since_e, :since_t, :tt).new
+    @o = Struct.new(:since_e, :since_t, :tt, :r_geo).new
     OptionParser.new do |opts|
       opts.on('-s time', 'Since edit')  { |t| @o.since_e = t }
       opts.on('-S time', 'Since taken') { |t| @o.since_t = t }
       opts.on('-t', 'Dump time taken')  { @o.tt = true }
+      opts.on('--rg N', 'round ll')     { |n| @o.r_geo = Integer(n) }
     end.parse!
     if @o.since_e
       t = Chronic.parse(@o.since_e, context: :past)
@@ -52,7 +53,6 @@ class Dumper
       d = {}
       where = [r.id]
       where << @since if @since
-      # warn "#{@sql_imgs} #{where}"
       @lib.fetch(@sql_imgs, *where).each do |i|
         meta = {
           t: i[:write_timestamp],
@@ -60,7 +60,10 @@ class Dumper
         }
         meta[:tt] = i[:tt] if @o.tt && !i[:tt].blank?
         geo = i.slice(*DT::GEO).values.compact.map(&:to_s)
-        meta[:geo] = geo unless geo.empty?
+        unless geo.empty?
+          meta[:geo] = geo
+          meta[:geo].map! { |v| v.to_f.round(@o.r_geo) } if @o.r_geo
+        end
         tags = get_tags(i[:id])
         meta[:tags] = tags unless tags.empty?
         d[i[:filename]] ||= {}
