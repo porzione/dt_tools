@@ -11,7 +11,7 @@ require_relative 'models'
 class Restore
   ImageSt = Struct.new :file, :ver, :meta, :roll_id, :roll_name
 
-  Op = Struct.new :dry, :v, :vv, :force, :add_tag, :del_tag,
+  Op = Struct.new :dry, :v, :vv, :vg, :force, :add_tag, :del_tag,
                   :no_geo, :r_geo, :no_meta, :del_meta
 
   def initialize
@@ -22,17 +22,18 @@ class Restore
   def optparse
     @o = Op.new
     OptionParser.new do |opts|
-      opts.on('-n',     'dry run')  { @o.dry       = true }
-      opts.on('-v',     'verbose')  { @o.v         = true }
-      opts.on('--vv',   'very -v')  { @o.vv        = true }
-      opts.on('-f',     'force')    { @o.force     = true }
-      opts.on('--at',   'add tags') { @o.add_tag   = true }
-      opts.on('--dt',   'del tags') { @o.del_tag   = true }
-      opts.on('--rg N', 'round ll') { |n| @o.r_geo = Integer(n) }
-      opts.on('--ng',   'no geo')   { @o.no_geo    = true }
-      opts.on('--nm',   'no meta')  { @o.no_meta   = true }
-      opts.on('--dm',   'del meta') { @o.del_meta  = true }
-      opts.on('-i T',   'Ignore')   { |t| @ignore_tags << t }
+      opts.on('-n',     'dry run')     { @o.dry       = true }
+      opts.on('-v',     'verbose')     { @o.v         = true }
+      opts.on('--vv',   'very -v')     { @o.vv        = true }
+      opts.on('--vg',   'verbose geo') { @o.vg        = true }
+      opts.on('-f',     'force')       { @o.force     = true }
+      opts.on('--at',   'add tags')    { @o.add_tag   = true }
+      opts.on('--dt',   'del tags')    { @o.del_tag   = true }
+      opts.on('--rg N', 'round ll')    { |n| @o.r_geo = Integer(n) }
+      opts.on('--ng',   'no geo')      { @o.no_geo    = true }
+      opts.on('--nm',   'no meta')     { @o.no_meta   = true }
+      opts.on('--dm',   'del meta')    { @o.del_meta  = true }
+      opts.on('-i T',   'Ignore')      { |t| @ignore_tags << t }
     end.parse!
     @o.v = true if @o.vv
   end
@@ -217,7 +218,7 @@ class Restore
     og.transform_values! { |v| v.round(@o.r_geo) } if @o.r_geo
     return {} if ng == og
 
-    puts "ch geo old:#{og} new:#{ng}" if @o.vv
+    puts "ch geo old:#{og} new:#{ng}" if @o.vg
     nr
   end
 
