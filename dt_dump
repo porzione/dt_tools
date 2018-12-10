@@ -46,6 +46,14 @@ class Dumper
     @lib = Image.db
   end
 
+  def process_geo(geo)
+    r = @o.r_geo
+    geo.map do |v|
+      f = v.to_f
+      r ? f.round(r) : f
+    end
+  end
+
   def go
     data = {}
     FilmRoll.select(:id, :folder).order(:folder).each do |r|
@@ -60,10 +68,7 @@ class Dumper
         }
         meta[:tt] = i[:tt] if @o.tt && !i[:tt].blank?
         geo = i.slice(*DT::GEO).values.compact.map(&:to_s)
-        unless geo.empty?
-          meta[:geo] = geo
-          meta[:geo].map! { |v| v.to_f.round(@o.r_geo) } if @o.r_geo
-        end
+        meta[:geo] = process_geo(geo) unless geo.empty?
         tags = get_tags(i[:id])
         meta[:tags] = tags unless tags.empty?
         d[i[:filename]] ||= {}
