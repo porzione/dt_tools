@@ -36,11 +36,12 @@ end
 
 class Files
   def initialize
-    @o = Struct.new(:v, :ox, :ni).new
+    @o = Struct.new(:v, :ox, :nf, :ui).new
     OptionParser.new do |opts|
-      opts.on('-v',   'verbose')      { @o.v  = true }
-      opts.on('--ox', 'orphaned xmp') { @o.ox = true }
-      opts.on('--nf', 'new images')   { @o.ni = true }
+      opts.on('-v',   'verbose')        { @o.v  = true }
+      opts.on('--ox', 'orphaned xmp')   { @o.ox = true }
+      opts.on('--nf', 'new files')      { @o.nf = true }
+      opts.on('--ui', 'updated images') { @o.ui = true }
       @opts = opts
     end.parse!
   end
@@ -48,8 +49,10 @@ class Files
   def go
     if @o.ox
       orph_xmp
-    elsif @o.ni
-      new_images
+    elsif @o.nf
+      new_files
+    elsif @o.ui
+      updated_images
     else
       puts @opts
     end
@@ -98,7 +101,7 @@ class Files
   end
 
   # find non imported files in film roll dirs
-  def new_images
+  def new_files
     FilmRoll.select(:id, :folder).order(:folder).all do |r|
       unless Dir.exist?(r.folder)
         warn "no r.folder:#{r.folder}"
@@ -113,6 +116,11 @@ class Files
         puts fp if Image.where(film_id: r.id, filename: file).count.zero?
       end
     end
+  end
+
+  # find updated images where xmp mtime is newer than images.write_timestamp
+  def updated_images
+
   end
 end
 
