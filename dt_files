@@ -120,7 +120,23 @@ class Files
 
   # find updated images where xmp mtime is newer than images.write_timestamp
   def updated_images
-
+    nf = []
+    FilmRoll.select(:id, :folder).order(:folder).all do |r|
+      unless Dir.exist?(r.folder)
+        warn "no r.folder:#{r.folder}"
+        next
+      end
+      puts r.folder if @o.v
+      images = Image
+               .select(:id, :write_timestamp, :filename)
+               .where(film_id: r.id, version: 0)
+      images.each do |i|
+        f = "#{r.folder}/#{i.filename}"
+        x = "#{f}.xmp"
+        nf << f if File::Stat.new(x).mtime.to_i > i.write_timestamp
+      end
+    end
+    puts nf.join(' ') unless nf.empty?
   end
 end
 
