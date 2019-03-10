@@ -133,6 +133,10 @@ class Files
       images.each do |i|
         f = "#{r.folder}/#{i.filename}"
         x = "#{f}.xmp"
+        unless File.exist?(x)
+          warn "NOT FOUND: #{x}"
+          next
+        end
         nf << f if File::Stat.new(x).mtime.to_i > i.write_timestamp
       end
     end
